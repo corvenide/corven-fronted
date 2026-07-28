@@ -116,7 +116,7 @@ export default function Sidebar() {
 
                 <div className="my-1 h-px w-8 bg-[#30363d]" />
 
-                <NavigationButton
+                {/* <NavigationButton
                     label="Files"
                     title="File Explorer"
                     active={
@@ -162,9 +162,9 @@ export default function Sidebar() {
                     }
                     icon={<Play className="h-5 w-5" />}
                     onClick={() => handleIdePanel('debug')}
-                />
+                /> */}
 
-                <div className="my-1 h-px w-8 bg-[#30363d]" />
+                {/* <div className="my-1 h-px w-8 bg-[#30363d]" /> */}
 
                 <NavigationButton
                     label="Nodes"

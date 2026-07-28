@@ -6,6 +6,7 @@ import AppLayout from '../components/layout/AppLayout';
 
 import AuthPage from '../features/auth/pages/AuthPage';
 import HomePage from '../pages/HomePage';
+import DonatePage from '../pages/DonatePage';
 import DashboardPage from '../pages/DashboardPage';
 import IdePage from '../pages/IdePage';
 import NodesPage from '../pages/NodePage';
@@ -53,5 +54,9 @@ export const router = createBrowserRouter([
     {
         path: '/',
         element: <HomePage />,
+    },
+    {
+        path: '/donate',
+        element: <DonatePage />,
     },
 ]);
