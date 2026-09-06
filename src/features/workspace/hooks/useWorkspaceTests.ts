@@ -17,7 +17,7 @@ import type {
 } from '../types/test.types';
 import { parseTestOutput } from '../utils/parseTestOutput';
 
-const TEST_SERVICE_URL = 'http://localhost:8004';
+const TEST_SERVICE_URL = 'https://staging-api.corvanide.space';
 
 const EMPTY_RUN: WorkspaceTestRun = {
     runId: null,

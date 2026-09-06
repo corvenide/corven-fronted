@@ -43,8 +43,7 @@ interface UseWorkspaceTerminalResult {
     disconnect: () => void;
 }
 
-const TERMINAL_SERVICE_URL = 'http://localhost:8004';
-// process.env.NEXT_PUBLIC_TERMINAL_SERVICE_URL ??
+const TERMINAL_SERVICE_URL = 'https://staging-api.corvanide.space';
 
 function getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;

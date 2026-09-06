@@ -229,7 +229,6 @@ const GENERAL_FEEDBACK: Comment[] = [
                 content: "Absolutely agree! The community support has been amazing.",
                 timestamp: "7 hours ago",
                 likes: 4,
-                replies: [],
             },
         ],
     },
@@ -448,7 +447,6 @@ export default function DonateView({ onBackToHome, activeBlock }: DonateViewProp
                 content: replyText,
                 timestamp: "Just now",
                 likes: 0,
-                replies: [],
             };
 
             if (isTopic && topicId) {

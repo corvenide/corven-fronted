@@ -73,7 +73,7 @@ interface UseWorkspaceBuildResult {
     refreshProjects: () => void;
 }
 
-const BUILD_SERVICE_URL = 'http://localhost:8004';
+const BUILD_SERVICE_URL = 'https://staging-api.corvanide.space';
 
 function getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;

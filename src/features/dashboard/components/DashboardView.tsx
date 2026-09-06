@@ -143,8 +143,21 @@ export default function DashboardView({
         setWorkspaceToRemove(null);
     };
 
-    const handleWorkspaceClick = (workspaceId: string) => {
-        onNavigateToIde(workspaceId);
+    const handleWorkspaceClick = (workspace: Workspace) => {
+        if (workspace.status === 'RUNNING') {
+            onNavigateToIde(workspace.id);
+            return;
+        }
+
+        if (workspace.status === 'PROVISIONING') {
+            alert('Workspace is still starting. Please wait until it is running.');
+            return;
+        }
+
+        if (workspace.status === 'STOPPED') {
+            onStartWorkspace(workspace.id);
+            return;
+        }
     };
 
     return (
@@ -370,7 +383,7 @@ export default function DashboardView({
                                                 <button
                                                     onClick={() =>
                                                         handleWorkspaceClick(
-                                                            ws.id,
+                                                            ws,
                                                         )
                                                     }
                                                     className="p-2.5 rounded-lg border bg-[#1f6feb]/10 border-[#1f6feb]/30 text-[#58a6ff] hover:bg-[#1f6feb]/20 transition-colors cursor-pointer"
@@ -411,7 +424,7 @@ export default function DashboardView({
                                             <button
                                                 onClick={() =>
                                                     handleWorkspaceClick(
-                                                        ws.id,
+                                                        ws,
                                                     )
                                                 }
                                                 className="text-left flex-1 cursor-pointer"
