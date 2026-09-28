@@ -11,8 +11,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Vite bakes these into the bundle at build time.
-export VITE_API_URL="${VITE_API_URL:-https://staging-api.corvan.space/api}"
-export VITE_TERMINAL_URL="${VITE_TERMINAL_URL:-https://staging-api.corvan.space}"
+export VITE_API_URL="${VITE_API_URL:-https://staging-api.corvanide.space/api}"
+export VITE_TERMINAL_URL="${VITE_TERMINAL_URL:-https://staging-api.corvanide.space}"
 WEB_ROOT="${WEB_ROOT:-/opt/corven/web}"
 
 if [ "${1:-}" != "--no-pull" ]; then
@@ -43,4 +43,4 @@ done
 cp dist/index.html "$WEB_ROOT"/index.html.tmp
 mv "$WEB_ROOT"/index.html.tmp "$WEB_ROOT"/index.html
 
-echo "Done. Open https://corven.space"
+echo "Done. Open https://corvanide.space"

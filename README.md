@@ -148,7 +148,7 @@ The API gateway must implement these routes and allow the frontend's origin with
 
 ## Deployment
 
-Production is served at `https://corven.space` from the same AWS Lightsail instance as the backend, with Caddy serving the static build. The full guide is in the backend repository: [`docs/DEPLOYMENT.md`](https://github.com/corvenide/corven-backend-v2/blob/main/docs/DEPLOYMENT.md).
+Production is served at `https://corvanide.space` from the same AWS Lightsail instance as the backend, with Caddy serving the static build. The full guide is in the backend repository: [`docs/DEPLOYMENT.md`](https://github.com/corvenide/corven-backend-v2/blob/main/docs/DEPLOYMENT.md).
 
 To release a new version, run this on the server:
 
@@ -161,8 +161,8 @@ The script builds in a temporary Node container and publishes `dist/` to `/opt/c
 
 | Variable | Default |
 |---|---|
-| `VITE_API_URL` | `https://staging-api.corvan.space/api` |
-| `VITE_TERMINAL_URL` | `https://staging-api.corvan.space` |
+| `VITE_API_URL` | `https://staging-api.corvanide.space/api` |
+| `VITE_TERMINAL_URL` | `https://staging-api.corvanide.space` |
 | `WEB_ROOT` | `/opt/corven/web` |
 
 `VITE_*` values are baked into the bundle, so changing them requires a rebuild.
