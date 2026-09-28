@@ -1,154 +1,74 @@
-# FiberDev Studio Frontend
+# Corven IDE
 
-FiberDev Studio is a browser-based development environment for building, testing, and debugging applications on the Fiber Network and Nervos CKB.
+Corven IDE (formerly FiberDev Studio) is a browser-based IDE for building, testing, debugging, and deploying Nervos CKB smart contracts. Each workspace gets its own private CKB devnet and a Rust/RISC-V build container, provided by the [Corven backend](https://github.com/corvenide/corven-backend-v2).
 
-This repository contains the frontend application responsible for the developer dashboard, workspace interface, code editor, terminal, file explorer, project management, and interaction with the FiberDev backend services.
+This repository contains the web frontend: the landing page, dashboard, workspace IDE, devnet explorer, and settings.
 
 ## Features
 
-* User authentication
-* Developer dashboard
-* Create and manage workspaces
-* Browser-based code editor
-* Workspace file explorer
-* Integrated terminal
-* File creation, editing, and deletion
-* Automatic file saving
-* Project and template selection
-* Workspace runtime status
-* CKB node status monitoring
-* Fiber node controls
-* Contract build and test interface
-* Logs and runtime output
-* Responsive dark-mode interface
+- **Sign-in** with email and password or a CKB wallet (via CCC); sessions refresh automatically from an httpOnly cookie
+- **Dashboard** to create, open, and delete workspaces
+- **Workspace IDE**
+  - File explorer with create, rename, and delete
+  - CodeMirror editor with Rust, JavaScript/TypeScript, JSON, Markdown, CSS, HTML, Python, and Molecule highlighting, plus syntax linting
+  - Integrated terminal (xterm.js over socket.io)
+  - Build and test panels that stream output and parse test results
+  - Molecule schema code generation
+  - Debugger: replay devnet transactions with `ckb-debugger` and inspect exit codes and cycles, or run a built binary on its own
+  - Deploy panel: one-click devnet deploys, wallet-signed testnet deploys, and upgradable deploys through Type ID
+  - AI assistant panel backed by Claude through the backend (the API key never reaches the browser)
+- **Devnets** page with live chain data for each workspace's node, test accounts, and scripts
 
-## Technology Stack
+## Tech stack
 
-* Next.js
-* React
-* TypeScript
-* Tailwind CSS
-* shadcn/ui
-* Lucide React
-* Axios or Fetch API
-* React Query
-* Zustand
-* Monaco Editor
-* WebSockets
+- React 19, TypeScript, Vite 6
+- Tailwind CSS 4, Framer Motion, Lucide icons
+- React Router 7, TanStack Query 5
+- CodeMirror 6 (`@uiw/react-codemirror`), xterm.js
+- socket.io-client
+- `@ckb-ccc/connector-react` for wallets and CKB transactions
+- Express (`server.ts`) as the development and production host
 
-## Project Structure
+## Project structure
 
 ```text
-frontend/
-├── public/
-├── src/
-│   ├── app/
-│   │   ├── auth/
-│   │   ├── dashboard/
-│   │   ├── workspace/
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   ├── components/
-│   │   ├── common/
-│   │   ├── dashboard/
-│   │   ├── layout/
-│   │   ├── workspace/
-│   │   └── ui/
-│   ├── features/
-│   │   ├── auth/
-│   │   ├── projects/
-│   │   ├── templates/
-│   │   └── workspace/
-│   ├── hooks/
-│   ├── lib/
-│   ├── services/
-│   ├── stores/
-│   ├── types/
-│   └── utils/
-├── .env.example
-├── next.config.ts
-├── package.json
-├── tailwind.config.ts
-└── tsconfig.json
+src/
+  app/            App, router, providers
+  components/     layout, header, sidebar, auth guard, shared UI
+  config/env.ts   required environment variables
+  features/
+    auth/         login, wallet auth, auth context
+    dashboard/    workspace list and create/delete dialogs
+    workspace/    IDE: file explorer, editor, terminal, build, tests, AI panel
+    debugger/     ckb-debugger integration
+    deploy/       devnet and testnet deployment
+    devnet/       devnet explorer and CCC client that relays RPC through the API
+    node/         node status views
+    ai/           assistant API client and Markdown rendering
+  lib/            API client, session refresh, token storage, query client
+  pages/          route pages
+server.ts         Express server: Vite middleware in dev, static dist in production
+assets/           logos and images
 ```
 
-## Main Modules
+## Routes
 
-### Authentication
-
-Handles registration, login, logout, access-token storage, protected routes, and authenticated API requests.
-
-### Dashboard
-
-Displays user workspaces, recently opened projects, starter templates, workspace status, and project creation actions.
-
-### Workspace
-
-The workspace provides the main browser IDE interface, including:
-
-* File explorer
-* Code editor
-* Terminal
-* Runtime logs
-* Build controls
-* Test controls
-* Node status
-* Project information
-
-### Code Editor
-
-The editor is powered by Monaco Editor and supports:
-
-* Syntax highlighting
-* Multiple programming languages
-* File editing
-* Unsaved-change detection
-* Manual and automatic saving
-* Loading indicators
-* Keyboard shortcuts
-
-### Terminal
-
-The terminal communicates with the backend workspace runtime through WebSockets.
-
-It displays:
-
-* Command output
-* Build logs
-* Test results
-* CKB node logs
-* Fiber node logs
-* Runtime errors
+| Path | Page | Auth |
+|---|---|:---:|
+| `/` | Landing page | No |
+| `/auth` | Sign in / sign up | No |
+| `/donate` | Donations | No |
+| `/dashboard` | Workspace list | Yes |
+| `/ide/:workspaceId` | Workspace IDE | Yes |
+| `/nodes` | Devnets | Yes |
+| `/settings` | Settings | Yes |
 
 ## Prerequisites
 
-Ensure the following tools are installed:
+- Node.js 22+ and pnpm
+- A running [Corven backend](https://github.com/corvenide/corven-backend-v2) (API gateway and terminal service)
 
-* Node.js 20 or later
-* pnpm
-* Git
-
-Check the installed versions:
-
-```bash
-node --version
-pnpm --version
-git --version
-```
-
-## Installation
-
-Clone the repository:
-
-```bash
-git clone https://github.com/your-username/fiberdev-studio.git
-```
-
-Move into the frontend directory:
-
-```bash
-cd fiberdev-studio/frontend
-```
+## Getting started
 
 Install dependencies:
 
@@ -156,33 +76,15 @@ Install dependencies:
 pnpm install
 ```
 
-## Environment Variables
-
-Create a `.env.local` file in the frontend root directory:
-
-```bash
-cp .env.example .env.local
-```
-
-Add the following variables:
+Create a `.env` file in the repository root. The app throws on startup if either variable is missing.
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_WS_URL=ws://localhost:8000
-NEXT_PUBLIC_APP_NAME=FiberDev Studio
+# API gateway base URL, including the /api prefix
+VITE_API_URL=http://localhost:8000/api
+
+# Terminal service origin (a trailing /terminal is optional)
+VITE_TERMINAL_URL=http://localhost:8004
 ```
-
-### Environment Variable Description
-
-| Variable               | Description                                  |
-| ---------------------- | -------------------------------------------- |
-| `NEXT_PUBLIC_API_URL`  | Base URL for the FiberDev API Gateway        |
-| `NEXT_PUBLIC_WS_URL`   | WebSocket URL for terminals and runtime logs |
-| `NEXT_PUBLIC_APP_NAME` | Application display name                     |
-
-Do not store private API keys or backend secrets inside variables prefixed with `NEXT_PUBLIC_`.
-
-## Running the Application
 
 Start the development server:
 
@@ -190,388 +92,57 @@ Start the development server:
 pnpm dev
 ```
 
-Open the application at:
+The app runs at <http://localhost:3000>.
 
-```text
-http://localhost:3000
-```
+Set `DISABLE_HMR=true` to turn off hot reload and file watching.
 
-## Available Scripts
+## Scripts
 
-```bash
-pnpm dev
-```
+| Command | Description |
+|---|---|
+| `pnpm dev` | Start the Express + Vite dev server on port 3000 |
+| `pnpm build` | Build the client into `dist/` and bundle `server.ts` into `dist/server.cjs` |
+| `pnpm start` | Run the production server (`node dist/server.cjs`) |
+| `pnpm lint` | Type-check with `tsc --noEmit` |
+| `pnpm clean` | Remove `dist/` |
 
-Starts the development server.
+## Backend integration
 
-```bash
-pnpm build
-```
+REST calls go to `VITE_API_URL` with `Authorization: Bearer <token>` and `credentials: 'include'`, so the refresh cookie is sent. Terminal, build, and test sessions connect with socket.io to the `/terminal` namespace on `VITE_TERMINAL_URL`.
 
-Creates a production build.
+Endpoints the frontend uses:
 
-```bash
-pnpm start
-```
+| Area | Endpoints |
+|---|---|
+| Auth | `/auth/login`, `/auth/register`, `/auth/me`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all`, `/auth/wallet/challenge`, `/auth/wallet/login` |
+| Workspaces | `/workspaces`, `/workspaces/:id`, `/workspaces/:id/start`, `/stop`, `/status`, `/heartbeat` |
+| Files | `/workspaces/:id/files`, `/files/content`, `/files/rename`, `/directories` |
+| Devnet | `/workspaces/:id/devnet`, `/devnet/start`, `/devnet/stop`, `/devnet/rpc`, `/devnet/accounts`, `/devnet/scripts`, `/nodes` |
+| Contracts and deploys | `/workspaces/:id/contracts`, `/contracts/:name/binary`, `/deployments`, `/deployments/devnet`, `/molecule/generate` |
+| Debugger | `/workspaces/:id/debug/run`, `/debug/tx`, `/debug/transactions` |
+| AI | `/ai/status`, `/ai/chat` (server-sent events) |
 
-Starts the production server.
-
-```bash
-pnpm lint
-```
-
-Runs ESLint.
-
-```bash
-pnpm type-check
-```
-
-Runs TypeScript validation.
-
-```bash
-pnpm test
-```
-
-Runs frontend tests.
-
-## Backend Integration
-
-The frontend communicates with the FiberDev API Gateway.
-
-Example endpoints include:
-
-```text
-POST /auth/register
-POST /auth/login
-GET  /auth/me
-
-POST /workspaces
-GET  /workspaces
-GET  /workspaces/:id
-PATCH /workspaces/:id
-DELETE /workspaces/:id
-
-GET  /workspaces/:id/files
-GET  /workspaces/:id/files/content
-PUT  /workspaces/:id/files/content
-
-POST /workspaces/:id/start
-POST /workspaces/:id/stop
-GET  /workspaces/:id/status
-```
-
-The exact routes may change as backend services are developed.
-
-## Authentication
-
-After login, the frontend receives an access token from the authentication service.
-
-Authenticated requests should include:
-
-```http
-Authorization: Bearer <access-token>
-```
-
-Protected pages should verify that a valid session exists before rendering workspace content.
-
-## Workspace Lifecycle
-
-When a workspace is created:
-
-1. The frontend sends a workspace creation request.
-2. The workspace service creates the workspace record.
-3. The runtime service provisions the workspace environment.
-4. A dedicated workspace network and containers are created.
-5. The CKB node is initialized and started.
-6. The first project is generated from the selected template.
-7. The frontend receives workspace and runtime status updates.
-8. The user is redirected to the browser IDE.
-
-Possible workspace statuses include:
-
-```text
-CREATED
-PROVISIONING
-STARTING
-RUNNING
-STOPPING
-STOPPED
-FAILED
-```
-
-## WebSocket Communication
-
-WebSockets are used for real-time features such as:
-
-* Terminal input and output
-* Workspace provisioning progress
-* Runtime logs
-* Build logs
-* Test results
-* CKB node status
-* Fiber node status
-
-Example connection:
-
-```ts
-const socket = new WebSocket(
-  `${process.env.NEXT_PUBLIC_WS_URL}/workspaces/${workspaceId}/terminal`,
-);
-```
-
-Always close active WebSocket connections when a workspace page is unmounted.
-
-## State Management
-
-Suggested state separation:
-
-* Authentication state
-* Current workspace state
-* File explorer state
-* Active file state
-* Editor content state
-* Terminal state
-* Runtime state
-* Notification state
-
-Avoid storing server state and local UI state in the same store where possible.
-
-Use React Query for backend data and Zustand for local workspace state.
-
-## Code Style
-
-The project follows these conventions:
-
-* TypeScript strict mode
-* Functional React components
-* Named exports for reusable components
-* Feature-based folder organization
-* Tailwind CSS for styling
-* Reusable shadcn/ui components
-* API logic stored in service files
-* Shared interfaces stored in type files
-* ESLint and Prettier for formatting
-
-Example component:
-
-```tsx
-interface WorkspaceHeaderProps {
-  name: string;
-  status: string;
-}
-
-export function WorkspaceHeader({
-  name,
-  status,
-}: WorkspaceHeaderProps) {
-  return (
-    <header className="flex items-center justify-between border-b px-4 py-3">
-      <h1 className="font-semibold">{name}</h1>
-      <span className="text-sm text-muted-foreground">
-        {status}
-      </span>
-    </header>
-  );
-}
-```
-
-## Testing
-
-Recommended frontend test coverage includes:
-
-* Authentication forms
-* Protected routes
-* Workspace creation
-* Workspace loading states
-* File explorer actions
-* File content editing
-* Saving files
-* Editor dirty-state handling
-* Terminal connection states
-* Runtime status updates
-* API error handling
-
-Suggested tools:
-
-* Vitest
-* React Testing Library
-* Playwright
-* MSW
-
-Run tests with:
-
-```bash
-pnpm test
-```
-
-## Production Build
-
-Create a production build:
-
-```bash
-pnpm build
-```
-
-Start the production application:
-
-```bash
-pnpm start
-```
-
-Before deployment, confirm that:
-
-* Environment variables are configured
-* The API Gateway is accessible
-* WebSocket connections are allowed
-* CORS is configured correctly
-* Authentication cookies or tokens work over HTTPS
-* Production domains are included in backend configuration
+The API gateway must implement these routes and allow the frontend's origin with credentials in its CORS settings.
 
 ## Deployment
 
-The frontend can be deployed to:
-
-* Vercel
-* Netlify
-* Cloudflare Pages
-* AWS Amplify
-* Docker
-* Kubernetes
-
-Example Docker build:
-
-```dockerfile
-FROM node:22-alpine AS dependencies
-
-WORKDIR /app
-
-COPY package.json pnpm-lock.yaml ./
-
-RUN corepack enable && pnpm install --frozen-lockfile
-
-FROM node:22-alpine AS builder
-
-WORKDIR /app
-
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY . .
-
-RUN corepack enable && pnpm build
-
-FROM node:22-alpine AS runner
-
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
-
-EXPOSE 3000
-
-CMD ["pnpm", "start"]
-```
-
-## Troubleshooting
-
-### API requests fail
-
-Confirm that the backend API Gateway is running and that the following variable is correct:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-### WebSocket connection fails
-
-Confirm that:
-
-* The runtime service is running
-* The API Gateway supports WebSocket upgrades
-* The workspace is in the `RUNNING` state
-* The WebSocket URL is correct
-
-### Environment variables are undefined
-
-Restart the Next.js development server after changing `.env.local`:
-
 ```bash
-pnpm dev
+VITE_API_URL=https://api.example.com/api VITE_TERMINAL_URL=https://terminal.example.com pnpm build
+pnpm start
 ```
 
-Only environment variables beginning with `NEXT_PUBLIC_` are available inside browser components.
+`VITE_*` variables are baked in at build time, so set them before `pnpm build`, not at start. Before deploying, check that:
 
-### Monaco Editor fails during server rendering
+- The API gateway and terminal service are reachable from the browser over HTTPS/WSS
+- The backend's CORS settings allow the production origin with credentials
+- The refresh cookie's `SameSite` and `Secure` settings work across your domains
 
-Load Monaco Editor dynamically:
+## Notes
 
-```tsx
-import dynamic from 'next/dynamic';
+- `server.ts` still contains mock `/api/*` routes and a Gemini endpoint from the original prototype. The current UI talks to the Corven backend through `VITE_API_URL` and doesn't use them. `GEMINI_API_KEY` in `.env.example` only applies to those legacy routes.
+- `actix-web/` is an unrelated Vercel Actix Web starter and is not part of the app.
+- `layout.md` sketches the planned `src/` structure.
 
-const MonacoEditor = dynamic(
-  () => import('@monaco-editor/react'),
-  {
-    ssr: false,
-  },
-);
-```
+## Related repositories
 
-## Roadmap
-
-Planned frontend features include:
-
-* Multi-tab editor
-* Drag-and-drop file management
-* Integrated CKB block explorer
-* Smart contract debugger
-* Multi-node Fiber testing
-* Collaborative editing
-* GitHub repository integration
-* AI development assistant
-* Deployment dashboard
-* Workspace resource monitoring
-* Keyboard shortcut command palette
-
-## Contributing
-
-1. Create a new branch:
-
-```bash
-git checkout -b feature/feature-name
-```
-
-2. Make your changes.
-
-3. Run validation:
-
-```bash
-pnpm lint
-pnpm type-check
-pnpm test
-```
-
-4. Commit your changes:
-
-```bash
-git commit -m "feat: add feature description"
-```
-
-5. Push the branch:
-
-```bash
-git push origin feature/feature-name
-```
-
-6. Open a pull request.
-
-## License
-
-This project is licensed under the MIT License.
-
-## Project Status
-
-FiberDev Studio is currently under active development.
-
-Some APIs, workspace features, node controls, and runtime integrations may change as the platform architecture evolves.
+- [corvenide/corven-backend-v2](https://github.com/corvenide/corven-backend-v2): NestJS microservices backend
