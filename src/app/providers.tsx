@@ -2,65 +2,48 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { useMemo } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { ccc } from '@ckb-ccc/connector-react';
 
 import { queryClient } from '../lib/query-client';
 import { AuthProvider } from '../features/auth/context/AuthContext';
-import { ccc } from '@ckb-ccc/connector-react';
 
-interface AppProvidersProps {
-    children: ReactNode;
-}
+// Styles the CCC wallet picker to match the rest of Corven.
+const connectorStyles = {
+    '--background': '#0f1114',
+    '--divider': 'rgba(255, 255, 255, 0.08)',
+    '--btn-primary': '#171a1f',
+    '--btn-primary-hover': '#1d2127',
+    '--btn-secondary': '#171a1f',
+    '--btn-secondary-hover': '#1d2127',
+    '--icon-primary': '#ecebe6',
+    '--icon-secondary': 'rgba(236, 235, 230, 0.6)',
+    '--tip-color': '#9a9ea6',
+    color: '#ecebe6',
+} as CSSProperties;
 
-export default function AppProviders({
-    children,
-}: AppProvidersProps) {
-
-    const connectorStyles = {
-        '--background': '#161b22',
-        '--divider': 'rgba(255, 255, 255, 0.1)',
-        '--btn-primary': '#21262d',
-        '--btn-primary-hover': '#21262d',
-        '--btn-secondary': '#21262d',
-        '--btn-secondary-hover': '#30363d',
-        '--icon-primary': '#ffffff',
-        '--icon-secondary': 'rgba(255, 255, 255, 0.6)',
-        '--tip-color': '#8b949e',
-        color: '#ffffff',
-    } as CSSProperties;
-
-    const defaultClient = useMemo(
-        () => new ccc.ClientPublicTestnet(),
-        [],
-    );
+export default function AppProviders({ children }: { children: ReactNode }) {
+    const defaultClient = useMemo(() => new ccc.ClientPublicTestnet(), []);
 
     const clientOptions = useMemo(
         () => [
-            {
-                name: 'CKB Testnet',
-                client: new ccc.ClientPublicTestnet(),
-            },
-            {
-                name: 'CKB Mainnet',
-                client: new ccc.ClientPublicMainnet(),
-            },
+            { name: 'CKB Testnet', client: new ccc.ClientPublicTestnet() },
+            { name: 'CKB Mainnet', client: new ccc.ClientPublicMainnet() },
         ],
         [],
     );
 
     return (
         <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-                <ccc.Provider
-                    defaultClient={defaultClient}
-                    clientOptions={clientOptions}
-                    connectorProps={{
-                        style: connectorStyles,
-                    }}
-                >
-                    {children}
-                </ccc.Provider>
-            </AuthProvider>
-
+            {/* The wallet provider sits outside AuthProvider so sign-out can
+                also disconnect the wallet. */}
+            <ccc.Provider
+                defaultClient={defaultClient}
+                clientOptions={clientOptions}
+                connectorProps={{ style: connectorStyles }}
+                name="Corven"
+            >
+                <AuthProvider>{children}</AuthProvider>
+            </ccc.Provider>
         </QueryClientProvider>
     );
 }

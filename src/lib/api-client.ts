@@ -1,5 +1,6 @@
 // src/lib/api-client.ts
 import { env } from '../config/env';
+import { refreshSession } from './session';
 import { tokenStorage } from './token-storage';
 
 export class ApiError extends Error {
@@ -17,35 +18,45 @@ interface RequestOptions extends RequestInit {
     authenticated?: boolean;
 }
 
+async function send(path: string, options: RequestOptions): Promise<Response> {
+    const { authenticated = true, headers, ...requestOptions } = options;
+    const token = tokenStorage.get();
+
+    try {
+        return await fetch(`${env.apiUrl}${path}`, {
+            ...requestOptions,
+            credentials: 'include',
+            headers: {
+                Accept: 'application/json',
+                ...(requestOptions.body ? { 'Content-Type': 'application/json' } : {}),
+                ...(authenticated && token ? { Authorization: `Bearer ${token}` } : {}),
+                ...headers,
+            },
+        });
+    } catch {
+        throw new ApiError(
+            "Can't reach Corven right now. Check your connection and try again.",
+            0,
+        );
+    }
+}
+
 export async function apiClient<T>(
     path: string,
     options: RequestOptions = {},
 ): Promise<T> {
-    const {
-        authenticated = true,
-        headers,
-        ...requestOptions
-    } = options;
+    const authenticated = options.authenticated ?? true;
 
-    const token = tokenStorage.get();
+    let response = await send(path, options);
 
-    const response = await fetch(`${env.apiUrl}${path}`, {
-        ...requestOptions,
+    // Access token expired mid-session: refresh once and retry.
+    if (response.status === 401 && authenticated) {
+        const session = await refreshSession().catch(() => null);
 
-        headers: {
-            Accept: 'application/json',
-
-            ...(requestOptions.body
-                ? { 'Content-Type': 'application/json' }
-                : {}),
-
-            ...(authenticated && token
-                ? { Authorization: `Bearer ${token}` }
-                : {}),
-
-            ...headers,
-        },
-    });
+        if (session) {
+            response = await send(path, options);
+        }
+    }
 
     const contentType = response.headers.get('content-type');
 
@@ -54,12 +65,16 @@ export async function apiClient<T>(
         : await response.text();
 
     if (!response.ok) {
-        const message =
-            typeof body === 'object' &&
-                body !== null &&
-                'message' in body
-                ? String(body.message)
-                : `Request failed with status ${response.status}`;
+        const raw =
+            typeof body === 'object' && body !== null && 'message' in body
+                ? (body as { message: unknown }).message
+                : null;
+
+        const message = Array.isArray(raw)
+            ? raw.join(', ')
+            : typeof raw === 'string'
+              ? raw
+              : `Request failed with status ${response.status}`;
 
         throw new ApiError(message, response.status, body);
     }

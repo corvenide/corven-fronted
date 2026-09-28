@@ -18,6 +18,8 @@ import type {
     TerminalOutputPayload,
     TerminalReadyPayload,
 } from '../types/terminal.types';
+import { tokenStorage } from '../../../lib/token-storage';
+import { terminalServiceOrigin } from '../../../config/env';
 
 interface UseWorkspaceTerminalOptions {
     workspaceId: string;
@@ -43,11 +45,11 @@ interface UseWorkspaceTerminalResult {
     disconnect: () => void;
 }
 
-const TERMINAL_SERVICE_URL = 'https://staging-api.corvanide.space';
+const TERMINAL_SERVICE_URL = terminalServiceOrigin;
 
 function getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('fiberdev_access_token');
+    return tokenStorage.get();
 }
 
 export function useWorkspaceTerminal({
@@ -107,7 +109,7 @@ export function useWorkspaceTerminal({
 
         const socket = io(`${TERMINAL_SERVICE_URL}/terminal`, {
             transports: ['websocket'],
-            auth: { token },
+            auth: (cb: (data: object) => void) => cb({ token: getAccessToken() }),
             query: { workspaceId },
             reconnection: true,
             reconnectionAttempts: 5,

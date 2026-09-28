@@ -1,318 +1,525 @@
-'use client';
+// src/features/workspace/components/AIPanel.tsx
+//
+// Claude, in the IDE. Replies stream from /api/ai/chat. Each question can
+// carry the open file (and selection) as context; the Build and Tests panels
+// can send their output here with "Ask Claude".
 
-import React, { useState, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
-    Bot,
-    Sparkles,
-    Zap,
-    Cpu,
+    AlertTriangle,
+    ArrowUp,
+    Check,
     ChevronDown,
-    Send,
-    MessageSquare,
-    Clock,
+    FileCode,
+    KeyRound,
     PanelRightClose,
+    RotateCw,
+    Sparkles,
+    SquarePen,
+    Square,
+    Terminal,
 } from 'lucide-react';
+
+import { aiApi, type AiChatMessage } from '../../ai/api/ai.api';
+import type { AssistantRequest } from '../../ai/assistant-bridge';
+import { Markdown } from '../../ai/components/Markdown';
+
+export interface EditorContext {
+    path: string;
+    content: string;
+    selection: string;
+}
+
+interface AIPanelProps {
+    workspaceId: string;
+    onCollapse?: () => void;
+    /** Reads the open file and selection at send time. */
+    getEditorContext: () => EditorContext | null;
+    /** Inserts code at the cursor; undefined when no file is open. */
+    onInsertCode?: (code: string) => void;
+    /** A question sent from another panel (e.g. "Ask Claude" on a failed build). */
+    request: AssistantRequest | null;
+    onRequestHandled: () => void;
+}
 
 interface Message {
     id: string;
     role: 'user' | 'assistant';
     content: string;
-    timestamp: Date;
+    /** User messages: what was attached. */
+    context?: { file?: string; selection?: boolean; output?: 'build' | 'test' | 'terminal' };
+    /** Assistant messages. */
+    error?: string;
+    streaming?: boolean;
 }
 
-interface AIModel {
-    id: string;
-    name: string;
-    provider: string;
-    icon: React.ReactNode;
-    description: string;
-    available: boolean;
-    comingSoon?: boolean;
+const HISTORY_LIMIT = 40;
+
+const OUTPUT_LABEL = { build: 'Build output', test: 'Test output', terminal: 'Terminal output' } as const;
+
+function storageKey(workspaceId: string) {
+    return `corven.ai.chat.${workspaceId}`;
 }
 
-interface AIPanelProps {
-    onCollapse?: () => void;
+function loadHistory(workspaceId: string): Message[] {
+    try {
+        const raw = localStorage.getItem(storageKey(workspaceId));
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.filter((m) => m && typeof m.content === 'string') : [];
+    } catch {
+        return [];
+    }
 }
 
-const AVAILABLE_MODELS: AIModel[] = [
-    {
-        id: 'claude-3-opus',
-        name: 'Claude 3 Opus',
-        provider: 'Anthropic',
-        icon: <Bot className="h-4 w-4" />,
-        description: 'Most powerful model for complex tasks',
-        available: false,
-        comingSoon: true,
-    },
-    {
-        id: 'claude-3-sonnet',
-        name: 'Claude 3 Sonnet',
-        provider: 'Anthropic',
-        icon: <Bot className="h-4 w-4" />,
-        description: 'Balanced performance and speed',
-        available: false,
-        comingSoon: true,
-    },
-    {
-        id: 'claude-3-haiku',
-        name: 'Claude 3 Haiku',
-        provider: 'Anthropic',
-        icon: <Bot className="h-4 w-4" />,
-        description: 'Fastest model for quick responses',
-        available: false,
-        comingSoon: true,
-    },
-    {
-        id: 'gpt-4-turbo',
-        name: 'GPT-4 Turbo',
-        provider: 'OpenAI',
-        icon: <Cpu className="h-4 w-4" />,
-        description: 'Advanced reasoning and creativity',
-        available: false,
-        comingSoon: true,
-    },
-    {
-        id: 'gpt-3.5-turbo',
-        name: 'GPT-3.5 Turbo',
-        provider: 'OpenAI',
-        icon: <Cpu className="h-4 w-4" />,
-        description: 'Fast and efficient for most tasks',
-        available: false,
-        comingSoon: true,
-    },
-    {
-        id: 'gemini-pro',
-        name: 'Gemini Pro',
-        provider: 'Google',
-        icon: <Sparkles className="h-4 w-4" />,
-        description: 'Multimodal capabilities',
-        available: false,
-        comingSoon: true,
-    },
-];
+function saveHistory(workspaceId: string, messages: Message[]) {
+    try {
+        const settled = messages.filter((m) => !m.streaming).slice(-HISTORY_LIMIT);
+        localStorage.setItem(storageKey(workspaceId), JSON.stringify(settled));
+    } catch {
+        /* storage unavailable */
+    }
+}
 
-export function AIPanel({ onCollapse }: AIPanelProps) {
-    const [selectedModel, setSelectedModel] = useState<string>(AVAILABLE_MODELS[0].id);
-    const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 'welcome',
-            role: 'assistant',
-            content: '👋 Welcome! AI assistance is coming soon. We\'re integrating powerful models like Claude, GPT-4, and Gemini to help you code faster. Stay tuned!',
-            timestamp: new Date(),
-        },
-    ]);
-    const [inputMessage, setInputMessage] = useState('');
+function modelKey() {
+    return 'corven.ai.model';
+}
 
-    const selectedModelData = AVAILABLE_MODELS.find(m => m.id === selectedModel);
+const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const handleSendMessage = () => {
-        if (!inputMessage.trim()) return;
+export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCode, request, onRequestHandled }: AIPanelProps) {
+    const status = useQuery({ queryKey: ['ai', 'status'], queryFn: aiApi.status, staleTime: 5 * 60_000, retry: 1 });
 
-        const userMessage: Message = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: inputMessage,
-            timestamp: new Date(),
-        };
+    const [messages, setMessages] = useState<Message[]>(() => loadHistory(workspaceId));
+    const [input, setInput] = useState('');
+    const [includeFile, setIncludeFile] = useState(true);
+    const [model, setModel] = useState<string>(() => {
+        try {
+            return localStorage.getItem(modelKey()) ?? '';
+        } catch {
+            return '';
+        }
+    });
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [fileLabel, setFileLabel] = useState<string | null>(null);
 
-        setMessages(prev => [...prev, userMessage]);
-        setInputMessage('');
+    const abortRef = useRef<AbortController | null>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
 
-        // Simulate AI response (coming soon)
-        setTimeout(() => {
-            const assistantMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: `🚀 Thanks for your message! Full AI integration is coming soon. We're working on integrating ${selectedModelData?.name} and other models to provide you with the best coding assistance.`,
-                timestamp: new Date(),
+    const busy = messages.some((m) => m.streaming);
+    const models = status.data?.models ?? [];
+    const activeModel = models.find((m) => m.id === model) ?? models.find((m) => m.id === status.data?.defaultModel) ?? models[0];
+
+    useEffect(() => saveHistory(workspaceId, messages), [workspaceId, messages]);
+
+    // Stop a running reply when leaving the workspace.
+    useEffect(() => () => abortRef.current?.abort(), []);
+
+    // Keep the newest message in view while streaming.
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+    }, [messages]);
+
+    // Show which file will be sent (refreshes when the panel is used).
+    const refreshFileLabel = useCallback(() => {
+        const ctx = getEditorContext();
+        setFileLabel(ctx ? `${ctx.path}${ctx.selection ? ' · selection' : ''}` : null);
+    }, [getEditorContext]);
+
+    useEffect(() => {
+        refreshFileLabel();
+        const timer = window.setInterval(refreshFileLabel, 1500);
+        return () => window.clearInterval(timer);
+    }, [refreshFileLabel]);
+
+    const send = useCallback(
+        async (prompt: string, output?: AssistantRequest['output']) => {
+            const text = prompt.trim();
+            if (!text || busy) return;
+
+            const editor = includeFile ? getEditorContext() : null;
+
+            const userMessage: Message = {
+                id: newId(),
+                role: 'user',
+                content: text,
+                context: {
+                    file: editor?.path,
+                    selection: Boolean(editor?.selection),
+                    output: output?.kind,
+                },
             };
-            setMessages(prev => [...prev, assistantMessage]);
-        }, 1000);
+            const replyId = newId();
+
+            const history: AiChatMessage[] = [...messages.filter((m) => !m.error && m.content), userMessage].map((m) => ({
+                role: m.role,
+                content: m.content,
+            }));
+
+            setMessages((current) => [...current, userMessage, { id: replyId, role: 'assistant', content: '', streaming: true }]);
+            setInput('');
+
+            const controller = new AbortController();
+            abortRef.current = controller;
+
+            const patch = (update: Partial<Message> | ((m: Message) => Partial<Message>)) =>
+                setMessages((current) =>
+                    current.map((m) => (m.id === replyId ? { ...m, ...(typeof update === 'function' ? update(m) : update) } : m)),
+                );
+
+            try {
+                await aiApi.chat(
+                    {
+                        workspaceId,
+                        model: activeModel?.id,
+                        messages: history,
+                        activeFile: editor
+                            ? { path: editor.path, content: editor.content, selection: editor.selection || undefined }
+                            : undefined,
+                        output,
+                    },
+                    {
+                        signal: controller.signal,
+                        onText: (chunk) => patch((m) => ({ content: m.content + chunk })),
+                    },
+                );
+                patch({ streaming: false });
+            } catch (error) {
+                if (controller.signal.aborted) {
+                    patch((m) => ({ streaming: false, content: m.content || '_Stopped._' }));
+                } else {
+                    patch({ streaming: false, error: error instanceof Error ? error.message : 'Something went wrong.' });
+                }
+            } finally {
+                if (abortRef.current === controller) abortRef.current = null;
+            }
+        },
+        [busy, includeFile, getEditorContext, messages, workspaceId, activeModel?.id],
+    );
+
+    // Questions from the Build / Tests panels.
+    useEffect(() => {
+        if (!request || busy || !status.data?.enabled) return;
+        onRequestHandled();
+        void send(request.prompt, request.output);
+    }, [request, busy, status.data?.enabled, send, onRequestHandled]);
+
+    const retry = (assistantId: string) => {
+        const index = messages.findIndex((m) => m.id === assistantId);
+        const question = messages.slice(0, index).reverse().find((m) => m.role === 'user');
+        if (!question) return;
+        setMessages((current) => current.filter((m) => m.id !== assistantId && m.id !== question.id));
+        void send(question.content);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
+    const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            void send(input);
         }
     };
 
-    return (
-        <div className="flex h-full flex-col bg-[#161b22]">
-            {/* Header */}
-            <div className="shrink-0 border-b border-[#30363d] px-4 py-3">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-yellow-500" />
-                        <span className="text-sm font-semibold text-gray-200">
-                            AI
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <button
-                                type="button"
-                                onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                                className="flex items-center gap-2 rounded-md border border-[#30363d] bg-[#0d1117] px-3 py-1.5 text-xs text-gray-300 transition hover:border-[#58a6ff] hover:bg-[#1c2333]"
-                            >
-                                {selectedModelData?.icon}
-                                <span>{selectedModelData?.name}</span>
-                                <ChevronDown className="h-3 w-3" />
-                            </button>
+    // Grow the input with its content, up to a limit.
+    useEffect(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+    }, [input]);
 
-                            {isModelDropdownOpen && (
-                                <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-md border border-[#30363d] bg-[#0d1117] shadow-xl">
-                                    <div className="max-h-80 overflow-y-auto p-1">
-                                        {AVAILABLE_MODELS.map((model) => (
-                                            <button
-                                                key={model.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    setSelectedModel(model.id);
-                                                    setIsModelDropdownOpen(false);
-                                                }}
-                                                className={`flex w-full items-start gap-3 rounded-md px-3 py-2 text-left transition ${selectedModel === model.id
-                                                    ? 'bg-[#1c2333]'
-                                                    : 'hover:bg-[#161b22]'
-                                                    }`}
-                                            >
-                                                <div className="mt-0.5 text-gray-400">
-                                                    {model.icon}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-medium text-gray-200">
-                                                            {model.name}
-                                                        </span>
-                                                        {model.comingSoon && (
-                                                            <span className="rounded-full bg-yellow-500/10 px-1.5 py-0.5 text-[8px] font-medium text-yellow-500">
-                                                                Soon
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] text-gray-500">
-                                                            {model.provider}
-                                                        </span>
-                                                        <span className="text-[10px] text-gray-600">•</span>
-                                                        <span className="text-[10px] text-gray-500">
-                                                            {model.description}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
+    const suggestions = useMemo(
+        () =>
+            fileLabel
+                ? [
+                      'Explain what this file does',
+                      'Review this contract for bugs and cycle costs',
+                      'Write a ckb-testtool test for this contract',
+                      'How do I deploy this to the devnet?',
+                  ]
+                : [
+                      'How is this project structured?',
+                      'How do I write a type script that validates cell data?',
+                      'How do I deploy a contract to the devnet?',
+                  ],
+        [fileLabel],
+    );
+
+    // ------------------------------------------------------------------ render
+
+    const header = (
+        <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#30363d] px-3">
+            <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded bg-[#d97757]/15 text-[#e8a283]">
+                    <Sparkles className="h-3 w-3" />
+                </span>
+                <span className="text-[13px] font-semibold text-gray-100">Claude</span>
+
+                {status.data?.enabled && activeModel && (
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setPickerOpen((open) => !open)}
+                            className="flex h-6 items-center gap-1 rounded px-1.5 text-[11.5px] text-gray-400 hover:bg-[#21262d] hover:text-gray-200"
+                            aria-haspopup="listbox"
+                            aria-expanded={pickerOpen}
+                        >
+                            {activeModel.name}
+                            <ChevronDown className="h-3 w-3" />
+                        </button>
+
+                        {pickerOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setPickerOpen(false)} />
+                                <div role="listbox" className="absolute left-0 top-7 z-50 w-60 overflow-hidden rounded-md border border-[#30363d] bg-[#161b22] py-1 shadow-xl">
+                                    {models.map((m) => (
+                                        <button
+                                            key={m.id}
+                                            type="button"
+                                            role="option"
+                                            aria-selected={m.id === activeModel.id}
+                                            onClick={() => {
+                                                setModel(m.id);
+                                                try {
+                                                    localStorage.setItem(modelKey(), m.id);
+                                                } catch {
+                                                    /* ignore */
+                                                }
+                                                setPickerOpen(false);
+                                            }}
+                                            className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-[#21262d]"
+                                        >
+                                            <Check className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${m.id === activeModel.id ? 'text-[#58a6ff]' : 'text-transparent'}`} />
+                                            <span>
+                                                <span className="block text-[12.5px] text-gray-100">{m.name}</span>
+                                                {m.description && <span className="block text-[11px] text-gray-500">{m.description}</span>}
+                                            </span>
+                                        </button>
+                                    ))}
                                 </div>
-                            )}
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            <div className="flex items-center">
+                <button
+                    type="button"
+                    title="New chat"
+                    aria-label="New chat"
+                    disabled={busy || messages.length === 0}
+                    onClick={() => setMessages([])}
+                    className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-[#21262d] hover:text-gray-200 disabled:opacity-40"
+                >
+                    <SquarePen className="h-3.5 w-3.5" />
+                </button>
+                {onCollapse && (
+                    <button
+                        type="button"
+                        title="Hide panel"
+                        aria-label="Hide panel"
+                        onClick={onCollapse}
+                        className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-[#21262d] hover:text-gray-200"
+                    >
+                        <PanelRightClose className="h-3.5 w-3.5" />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+
+    if (status.isLoading) {
+        return (
+            <div className="flex h-full flex-col">
+                {header}
+                <div className="flex-1 space-y-3 p-4">
+                    <div className="h-3 w-2/3 animate-pulse rounded bg-[#21262d]" />
+                    <div className="h-3 w-1/2 animate-pulse rounded bg-[#21262d]" />
+                </div>
+            </div>
+        );
+    }
+
+    if (status.isError || !status.data?.enabled) {
+        return (
+            <div className="flex h-full flex-col">
+                {header}
+                <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#30363d] bg-[#0d1117]">
+                        {status.isError ? <AlertTriangle className="h-4.5 w-4.5 text-amber-400" /> : <KeyRound className="h-4.5 w-4.5 text-gray-300" />}
+                    </div>
+                    <p className="mt-4 text-[13.5px] font-medium text-gray-100">
+                        {status.isError ? 'Couldn’t reach the assistant' : 'Claude isn’t set up yet'}
+                    </p>
+                    <p className="mt-1.5 text-[12.5px] leading-[1.6] text-gray-400">
+                        {status.isError ? (
+                            'Check that the API gateway is running, then try again.'
+                        ) : (
+                            <>
+                                Add <code className="rounded bg-[#0d1117] px-1 font-mono text-[11.5px] text-gray-200">ANTHROPIC_API_KEY</code> to{' '}
+                                <code className="rounded bg-[#0d1117] px-1 font-mono text-[11.5px] text-gray-200">backend/.env</code> and restart the
+                                gateway.
+                            </>
+                        )}
+                    </p>
+                    {status.isError && (
+                        <button
+                            type="button"
+                            onClick={() => void status.refetch()}
+                            className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-[#30363d] px-3 py-1.5 text-[12.5px] text-gray-200 hover:bg-[#21262d]"
+                        >
+                            <RotateCw className="h-3.5 w-3.5" /> Retry
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex h-full min-h-0 flex-col">
+            {header}
+
+            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+                {messages.length === 0 ? (
+                    <div className="px-1">
+                        <p className="text-[13.5px] font-medium text-gray-100">Ask about your contracts</p>
+                        <p className="mt-1 text-[12.5px] leading-[1.6] text-gray-400">
+                            Claude sees the open file and your project’s file list. Use “Ask Claude” on a failed build or test to explain
+                            the error.
+                        </p>
+                        <div className="mt-4 space-y-1.5">
+                            {suggestions.map((s) => (
+                                <button
+                                    key={s}
+                                    type="button"
+                                    onClick={() => void send(s)}
+                                    className="block w-full rounded-md border border-[#30363d] bg-[#0d1117] px-3 py-2 text-left text-[12.5px] text-gray-300 transition-colors hover:border-[#484f58] hover:text-gray-100"
+                                >
+                                    {s}
+                                </button>
+                            ))}
                         </div>
-                        {onCollapse && (
+                    </div>
+                ) : (
+                    <div className="space-y-5">
+                        {messages.map((message) =>
+                            message.role === 'user' ? (
+                                <div key={message.id} className="flex flex-col items-end gap-1">
+                                    <div className="max-w-[92%] whitespace-pre-wrap break-words rounded-lg bg-[#21262d] px-3 py-2 text-[13px] leading-[1.55] text-gray-100">
+                                        {message.content}
+                                    </div>
+                                    {(message.context?.file || message.context?.output) && (
+                                        <div className="flex max-w-[92%] flex-wrap justify-end gap-1">
+                                            {message.context.output && (
+                                                <span className="inline-flex items-center gap-1 rounded border border-[#30363d] px-1.5 py-0.5 text-[10.5px] text-gray-400">
+                                                    <Terminal className="h-3 w-3" /> {OUTPUT_LABEL[message.context.output]}
+                                                </span>
+                                            )}
+                                            {message.context.file && (
+                                                <span className="inline-flex max-w-full items-center gap-1 truncate rounded border border-[#30363d] px-1.5 py-0.5 font-mono text-[10.5px] text-gray-400">
+                                                    <FileCode className="h-3 w-3 shrink-0" />
+                                                    <span className="truncate">{message.context.file.split('/').pop()}</span>
+                                                    {message.context.selection && ' · sel'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div key={message.id} className="min-w-0">
+                                    {message.content ? (
+                                        <Markdown text={message.content} onInsertCode={onInsertCode} />
+                                    ) : message.streaming ? (
+                                        <div className="flex items-center gap-1.5 py-1 text-[12.5px] text-gray-500">
+                                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#e8a283]" />
+                                            Thinking…
+                                        </div>
+                                    ) : null}
+
+                                    {message.streaming && message.content && (
+                                        <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-gray-400" />
+                                    )}
+
+                                    {message.error && (
+                                        <div className="mt-2 flex items-start gap-2 rounded-md border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-[12.5px] text-rose-200">
+                                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                            <div className="min-w-0 flex-1">
+                                                {message.error}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => retry(message.id)}
+                                                    className="ml-2 font-medium text-rose-100 underline-offset-2 hover:underline"
+                                                >
+                                                    Retry
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ),
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* ------------------------------------------------ Composer */}
+            <div className="shrink-0 border-t border-[#30363d] p-3">
+                <div className="rounded-lg border border-[#30363d] bg-[#0d1117] focus-within:border-[#58a6ff]/60">
+                    <textarea
+                        ref={inputRef}
+                        value={input}
+                        onChange={(event) => setInput(event.target.value)}
+                        onKeyDown={onKeyDown}
+                        rows={1}
+                        placeholder="Ask Claude…"
+                        aria-label="Message Claude"
+                        className="block max-h-[180px] w-full resize-none bg-transparent px-3 pt-2.5 text-[13px] leading-[1.5] text-gray-100 placeholder:text-gray-500 focus:outline-none"
+                    />
+                    <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
+                        {fileLabel ? (
                             <button
                                 type="button"
-                                onClick={onCollapse}
-                                className="rounded p-1 text-gray-500 transition hover:bg-[#21262d] hover:text-gray-200"
-                                title="Collapse AI panel"
+                                onClick={() => setIncludeFile((v) => !v)}
+                                title={includeFile ? 'The open file is sent with your question. Click to leave it out.' : 'Click to send the open file with your question.'}
+                                className={`inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10.5px] transition-colors ${
+                                    includeFile ? 'bg-[#1f6feb]/15 text-[#79b8ff]' : 'text-gray-500 line-through hover:text-gray-400'
+                                }`}
                             >
-                                <PanelRightClose className="h-4 w-4" />
+                                <FileCode className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{fileLabel.split('/').pop()}</span>
+                            </button>
+                        ) : (
+                            <span className="text-[10.5px] text-gray-600">No file open</span>
+                        )}
+
+                        {busy ? (
+                            <button
+                                type="button"
+                                onClick={() => abortRef.current?.abort()}
+                                title="Stop"
+                                aria-label="Stop generating"
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#21262d] text-gray-200 hover:bg-[#30363d]"
+                            >
+                                <Square className="h-3 w-3 fill-current" />
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => void send(input)}
+                                disabled={!input.trim()}
+                                title="Send (Enter)"
+                                aria-label="Send"
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#238636] text-white transition-colors hover:bg-[#2ea043] disabled:bg-[#21262d] disabled:text-gray-500"
+                            >
+                                <ArrowUp className="h-3.5 w-3.5" />
                             </button>
                         )}
                     </div>
                 </div>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((message) => (
-                    <div
-                        key={message.id}
-                        className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''
-                            }`}
-                    >
-                        <div
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${message.role === 'user'
-                                ? 'bg-blue-500/20 text-blue-400'
-                                : 'bg-yellow-500/20 text-yellow-400'
-                                }`}
-                        >
-                            {message.role === 'user' ? (
-                                <span className="text-xs font-medium">U</span>
-                            ) : (
-                                <Sparkles className="h-4 w-4" />
-                            )}
-                        </div>
-                        <div
-                            className={`max-w-[85%] rounded-lg px-4 py-2 ${message.role === 'user'
-                                ? 'bg-[#1c2333] text-gray-200'
-                                : 'bg-[#0d1117] text-gray-300'
-                                }`}
-                        >
-                            <div className="text-sm whitespace-pre-wrap">
-                                {message.content}
-                            </div>
-                            <div className="mt-1 flex items-center gap-2">
-                                <Clock className="h-3 w-3 text-gray-600" />
-                                <span className="text-[10px] text-gray-600">
-                                    {message.timestamp.toLocaleTimeString()}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-
-                {/* Coming Soon Banner */}
-                <div className="rounded-lg border border-dashed border-yellow-500/30 bg-yellow-500/5 p-4">
-                    <div className="flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-yellow-500" />
-                        <span className="text-xs text-gray-400">
-                            🚀 Full AI integration coming soon! Support for Claude, GPT-4, Gemini, and more.
-                        </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        {AVAILABLE_MODELS.slice(0, 3).map((model) => (
-                            <span
-                                key={model.id}
-                                className="rounded-full bg-[#1c2333] px-2 py-0.5 text-[10px] text-gray-400"
-                            >
-                                {model.name}
-                            </span>
-                        ))}
-                        <span className="rounded-full bg-[#1c2333] px-2 py-0.5 text-[10px] text-gray-400">
-                            +{AVAILABLE_MODELS.length - 3} more
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Input */}
-            <div className="shrink-0 border-t border-[#30363d] p-3">
-                <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                        <input
-                            type="text"
-                            value={inputMessage}
-                            onChange={(e) => setInputMessage(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Ask about your code (coming soon)..."
-                            disabled
-                            className="w-full rounded-md border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-gray-200 placeholder-gray-500 outline-none transition focus:border-[#58a6ff] disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                    </div>
-                    <button
-                        type="button"
-                        onClick={handleSendMessage}
-                        disabled={!inputMessage.trim()}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#1c2333] text-gray-400 transition hover:bg-[#2d3748] hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        <Send className="h-4 w-4" />
-                    </button>
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                    <MessageSquare className="h-3 w-3 text-gray-600" />
-                    <span className="text-[10px] text-gray-600">
-                        AI features currently in development
-                    </span>
-                </div>
+                <p className="mt-1.5 px-1 text-[10.5px] text-gray-600">Claude can make mistakes. Check code before you deploy it.</p>
             </div>
         </div>
     );

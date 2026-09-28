@@ -1,60 +1,41 @@
 // src/features/auth/pages/AuthPage.tsx
 
-import {
-    Navigate,
-    useLocation,
-    useNavigate,
-} from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 import AuthView from '../../../components/AuthView';
+import LoadingScreen from '../../../components/common/LoadingScreen';
 import { useAuth } from '../hooks/useAuth';
 
 interface LocationState {
-    from?: {
-        pathname?: string;
-    };
+    from?: { pathname?: string; search?: string };
 }
 
 export default function AuthPage() {
-    const {
-        walletLogin,
-        isAuthenticated,
-        isInitializing,
-    } = useAuth();
+    const { isAuthenticated, isInitializing, endReason } = useAuth();
 
     const navigate = useNavigate();
     const location = useLocation();
 
-    const state =
-        location.state as LocationState | null;
+    const from = (location.state as LocationState | null)?.from;
 
+    // Only ever redirect back inside the app.
     const destination =
-        state?.from?.pathname || '/dashboard';
+        from?.pathname && from.pathname.startsWith('/') && from.pathname !== '/auth'
+            ? `${from.pathname}${from.search ?? ''}`
+            : '/dashboard';
 
     if (isInitializing) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-[#0d1117]">
-                <span className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     if (isAuthenticated) {
-        return (
-            <Navigate
-                to={destination}
-                replace
-            />
-        );
+        return <Navigate to={destination} replace />;
     }
 
     return (
         <AuthView
-            onAuthenticated={() => {
-                navigate(destination, {
-                    replace: true,
-                });
-            }}
+            sessionExpired={endReason === 'expired'}
+            onAuthenticated={() => navigate(destination, { replace: true })}
         />
     );
 }

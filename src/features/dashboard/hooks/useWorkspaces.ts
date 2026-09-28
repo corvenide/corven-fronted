@@ -22,6 +22,11 @@ export function useWorkspaces() {
     const workspacesQuery = useQuery({
         queryKey: workspaceKeys.list(),
         queryFn: () => workspaceApi.list(),
+        // Keep the cards live while any workspace is starting.
+        refetchInterval: (query) =>
+            query.state.data?.some((workspace) => workspace.status === 'PROVISIONING')
+                ? 2_000
+                : false,
     });
 
     const invalidateList = () =>
@@ -40,11 +45,9 @@ export function useWorkspaces() {
     const startMutation = useMutation({
         mutationFn: (workspaceId: string) =>
             workspaceApi.start(workspaceId),
-        onSuccess: async (_data, workspaceId) => {
+        onSuccess: async (status, workspaceId) => {
+            queryClient.setQueryData(workspaceKeys.status(workspaceId), status);
             await invalidateList();
-            await queryClient.invalidateQueries({
-                queryKey: workspaceKeys.status(workspaceId),
-            });
         },
     });
 

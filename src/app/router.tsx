@@ -1,5 +1,5 @@
 // src/app/router.tsx
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import AppLayout from '../components/layout/AppLayout';
@@ -10,6 +10,7 @@ import DonatePage from '../pages/DonatePage';
 import DashboardPage from '../pages/DashboardPage';
 import IdePage from '../pages/IdePage';
 import NodesPage from '../pages/NodePage';
+import SettingsPage from '../pages/SettingsPage';
 // import NotFoundPage from '../pages/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -35,16 +36,21 @@ export const router = createBrowserRouter([
                         element: <DashboardPage />,
                     },
                     {
-                        path: '/ide',
-                        element: <IdePage />,
-                    },
-                    {
                         path: '/ide/:workspaceId',
                         element: <IdePage />,
                     },
                     {
                         path: '/nodes',
                         element: <NodesPage />,
+                    },
+                    {
+                        path: '/settings',
+                        element: <SettingsPage />,
+                    },
+                    {
+                        // Old links to the bare IDE go to the workspace list.
+                        path: '/ide',
+                        element: <Navigate to="/dashboard" replace />,
                     },
                 ],
             },

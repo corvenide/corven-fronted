@@ -308,7 +308,7 @@ export function TerminalPanel({
         fitAddonRef.current = fitAddon;
 
         terminal.writeln(
-            '\x1b[34mFiberDev Studio Terminal\x1b[0m',
+            '\x1b[34mCorven terminal\x1b[0m',
         );
 
         terminal.writeln(

@@ -1,22 +1,22 @@
 // src/components/common/LoadingScreen.tsx
-import { Terminal } from 'lucide-react';
 
-export default function LoadingScreen() {
+export default function LoadingScreen({ label = 'Restoring your session' }: { label?: string }) {
     return (
-        <div className="min-h-screen bg-[#0d1117] flex flex-col items-center justify-center font-mono text-gray-400 p-6 select-none">
-            <div className="max-w-md w-full space-y-4 text-center">
-                <h2 className="text-white font-bold text-base">
-                    BOOTING CORVEN IDE...
-                </h2>
-
-                <div className="w-full bg-[#161b22] h-1.5 rounded-full overflow-hidden border border-[#30363d]">
-                    <div className="bg-[#1f6feb] h-full w-2/3 rounded-full animate-pulse" />
-                </div>
-
-                <p className="text-[10px] text-gray-500">
-                    Restoring your secure development session...
-                </p>
-            </div>
+        <div
+            className="flex min-h-screen flex-col items-center justify-center bg-[#0a0b0d] text-[#9a9ea6]"
+            role="status"
+            aria-live="polite"
+        >
+            <span className="relative flex h-10 w-10 items-center justify-center">
+                <span className="absolute inset-0 rounded-full border border-white/10" />
+                <span className="absolute inset-0 animate-spin rounded-full border border-transparent border-t-[#3cc68a]" />
+            </span>
+            <p
+                className="mt-5 text-[11px] uppercase tracking-[0.18em] text-[#62676f]"
+                style={{ fontFamily: "'Geist Mono', ui-monospace, monospace" }}
+            >
+                {label}
+            </p>
         </div>
     );
 }

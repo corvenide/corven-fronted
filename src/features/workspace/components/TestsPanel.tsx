@@ -20,6 +20,7 @@ import {
     File,
 } from 'lucide-react';
 
+import { AskClaudeButton } from '../../ai/components/AskClaudeButton';
 import { useWorkspaceTests } from '../hooks/useWorkspaceTests';
 import { useWorkspaceFiles } from '../hooks/useWorkspaceFiles';
 
@@ -345,6 +346,17 @@ export function TestsPanel({ workspaceId }: TestsPanelProps) {
                                         <FolderOpen className="h-3 w-3" />
                                         {tests.projectPath}
                                     </span>
+                                )}
+                                {(tests.run.status === 'failed' || tests.run.status === 'error') && (
+                                    <AskClaudeButton
+                                        kind="test"
+                                        prompt={
+                                            tests.run.summary.failed
+                                                ? `${tests.run.summary.failed} test(s) failed. Why, and how do I fix them?`
+                                                : 'The test run failed. What went wrong and how do I fix it?'
+                                        }
+                                        output={tests.run.output}
+                                    />
                                 )}
                                 <span className="font-mono text-[10px] text-gray-600">
                                     make test

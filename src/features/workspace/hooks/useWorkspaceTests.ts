@@ -16,8 +16,10 @@ import type {
     WorkspaceTestRun,
 } from '../types/test.types';
 import { parseTestOutput } from '../utils/parseTestOutput';
+import { tokenStorage } from '../../../lib/token-storage';
+import { terminalServiceOrigin } from '../../../config/env';
 
-const TEST_SERVICE_URL = 'https://staging-api.corvanide.space';
+const TEST_SERVICE_URL = terminalServiceOrigin;
 
 const EMPTY_RUN: WorkspaceTestRun = {
     runId: null,
@@ -31,7 +33,7 @@ const EMPTY_RUN: WorkspaceTestRun = {
 
 function getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('fiberdev_access_token');
+    return tokenStorage.get();
 }
 
 interface UseWorkspaceTestsResult {
@@ -104,7 +106,7 @@ export function useWorkspaceTests(workspaceId: string): UseWorkspaceTestsResult 
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
             timeout: 10000,
-            auth: token ? { token } : undefined,
+            auth: (cb: (data: object) => void) => cb({ token: getAccessToken() }),
             query: { workspaceId },
         });
         socketRef.current = socket;

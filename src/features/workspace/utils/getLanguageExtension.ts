@@ -7,6 +7,8 @@ import { html } from '@codemirror/lang-html';
 import { markdown } from '@codemirror/lang-markdown';
 import type { Extension } from '@codemirror/state';
 
+import { molecule } from './molecule-language';
+
 /**
  * Maps a file name/path to the matching CodeMirror language extension.
  * Falls back to `null` (plain text, no highlighting) for unknown types.
@@ -40,6 +42,8 @@ export function getLanguageExtension(
         case 'md':
         case 'mdx':
             return markdown();
+        case 'mol':
+            return molecule();
         default:
             return null;
     }
@@ -56,6 +60,7 @@ export function getIndentSize(fileName: string): number {
         case 'rs':
         case 'py':
         case 'json':
+        case 'mol':
             return 4;
         case 'ts':
         case 'tsx':

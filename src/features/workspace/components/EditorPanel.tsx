@@ -1,9 +1,11 @@
 // src/features/workspace/components/EditorPanel.tsx
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState, type Ref } from 'react';
 import {
     Check,
     FileCode,
+    Loader2,
     Save,
+    Wand2,
 } from 'lucide-react';
 import CodeMirror, {
     type ReactCodeMirrorRef,
@@ -23,6 +25,7 @@ import {
     getIndentSize,
 } from '../utils/getLanguageExtension';
 import { syntaxErrorLinter } from '../utils/syntaxErrorLinter';
+import type { MoleculeLanguage, MoleculeResult } from '../api/molecule.api';
 
 interface EditorPanelProps {
     file: WorkspaceFile | null;
@@ -33,7 +36,19 @@ interface EditorPanelProps {
 
     onChange: (content: string) => void;
     onSave: () => Promise<void>;
+
+    /** Access to the CodeMirror view (selection, inserting code). */
+    editorRef?: Ref<ReactCodeMirrorRef>;
+
+    /** Molecule schemas: generate bindings next to the open .mol file. */
+    onGenerateBindings?: (language: MoleculeLanguage) => Promise<MoleculeResult>;
 }
+
+type BindingsStatus =
+    | { state: 'idle' }
+    | { state: 'running'; language: MoleculeLanguage }
+    | { state: 'done'; result: MoleculeResult }
+    | { state: 'error'; message: string };
 
 // Tweaks the bundled github-dark theme so it matches this app's palette
 // (#0d1117 background, #30363d borders) instead of GitHub's own tones.
@@ -73,7 +88,24 @@ export function EditorPanel({
     isLoading,
     onChange,
     onSave,
+    editorRef,
+    onGenerateBindings,
 }: EditorPanelProps) {
+    const [bindings, setBindings] = useState<BindingsStatus>({ state: 'idle' });
+    useEffect(() => setBindings({ state: 'idle' }), [file?.path]);
+
+    const isSchema = Boolean(file?.name.toLowerCase().endsWith('.mol') && onGenerateBindings);
+
+    const generateBindings = async (language: MoleculeLanguage) => {
+        if (!onGenerateBindings) return;
+        setBindings({ state: 'running', language });
+        try {
+            setBindings({ state: 'done', result: await onGenerateBindings(language) });
+        } catch (error) {
+            setBindings({ state: 'error', message: error instanceof Error ? error.message : String(error) });
+        }
+    };
+
     // Recompute the language extension only when the open file changes,
     // not on every keystroke.
     const languageExtension = useMemo(
@@ -150,6 +182,25 @@ export function EditorPanel({
                     WORKSPACE &gt; {file.path}
                 </span>
 
+                <div className="flex shrink-0 items-center gap-1.5">
+                {isSchema && (['rust', 'c'] as const).map((language) => (
+                    <button
+                        key={language}
+                        type="button"
+                        disabled={bindings.state === 'running'}
+                        onClick={() => void generateBindings(language)}
+                        title={`Run moleculec and write ${file.name.replace(/\.mol$/i, language === 'rust' ? '.rs' : '.h')} next to this schema`}
+                        className="flex items-center gap-1 rounded border border-[#30363d] bg-[#21262d] px-2.5 py-1 text-[11px] text-gray-300 hover:border-[#484f58] disabled:opacity-50"
+                    >
+                        {bindings.state === 'running' && bindings.language === language ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                            <Wand2 className="h-3.5 w-3.5" />
+                        )}
+                        {language === 'rust' ? 'Rust bindings' : 'C header'}
+                    </button>
+                ))}
+
                 <button
                     type="button"
                     disabled={
@@ -172,10 +223,41 @@ export function EditorPanel({
                             ? 'Save'
                             : 'Saved'}
                 </button>
+                </div>
             </div>
+
+            {isSchema && (bindings.state === 'done' || bindings.state === 'error') && (
+                <div
+                    role="status"
+                    className={`flex items-start justify-between gap-3 border-b px-4 py-1.5 text-[11.5px] ${
+                        bindings.state === 'done'
+                            ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-300'
+                            : 'border-rose-500/20 bg-rose-500/5 text-rose-300'
+                    }`}
+                >
+                    <span className="min-w-0 break-words font-mono">
+                        {bindings.state === 'done'
+                            ? `Wrote ${bindings.result.outputPath} (${(bindings.result.bytes / 1024).toFixed(1)} KB). ${
+                                bindings.result.language === 'rust'
+                                    ? 'Add molecule = { version = "0.9", default-features = false } to the contract to use it.'
+                                    : 'Include it with molecule_reader.h / molecule_builder.h.'
+                            }`
+                            : bindings.message}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setBindings({ state: 'idle' })}
+                        className="shrink-0 text-gray-500 hover:text-gray-300"
+                        aria-label="Dismiss"
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
 
             <div className="min-h-0 flex-1 overflow-hidden">
                 <CodeMirror
+                    ref={editorRef}
                     value={content}
                     onChange={onChange}
                     extensions={extensions}

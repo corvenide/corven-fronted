@@ -21,3 +21,12 @@ export const env = {
         'VITE_TERMINAL_URL',
     ),
 };
+
+/**
+ * Origin of the terminal service, for socket.io clients that append their
+ * own namespace. Accepts VITE_TERMINAL_URL with or without a trailing
+ * "/terminal" (e.g. http://localhost:8004 or http://localhost:8004/terminal).
+ */
+export const terminalServiceOrigin = env.terminalUrl
+    .replace(/\/+$/, '')
+    .replace(/\/terminal$/, '');

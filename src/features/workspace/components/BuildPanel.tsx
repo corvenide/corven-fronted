@@ -18,6 +18,7 @@ import {
     RefreshCw,
 } from 'lucide-react';
 
+import { AskClaudeButton } from '../../ai/components/AskClaudeButton';
 import { useWorkspaceBuild } from '../hooks/useWorkspaceBuild';
 import { useWorkspaceFiles } from '../hooks/useWorkspaceFiles';
 
@@ -476,6 +477,13 @@ export function BuildPanel({ workspaceId }: BuildPanelProps) {
                                         <FolderOpen className="h-3 w-3" />
                                         {build.projectPath}
                                     </span>
+                                )}
+                                {build.status === 'error' && (
+                                    <AskClaudeButton
+                                        kind="build"
+                                        prompt="My build failed. What is the error and how do I fix it?"
+                                        output={build.currentOutput || build.history[build.history.length - 1]?.output || build.error || ''}
+                                    />
                                 )}
                                 <span className="font-mono text-[10px] text-gray-600">
                                     {build.buildTarget === 'Release' ? 'make build-release' :

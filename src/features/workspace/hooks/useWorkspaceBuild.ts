@@ -1,6 +1,8 @@
 // src/features/workspace/hooks/useWorkspaceBuild.ts
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { tokenStorage } from '../../../lib/token-storage';
+import { terminalServiceOrigin } from '../../../config/env';
 
 export interface BuildEntry {
     status: 'idle' | 'running' | 'success' | 'error' | 'cancelled';
@@ -73,11 +75,11 @@ interface UseWorkspaceBuildResult {
     refreshProjects: () => void;
 }
 
-const BUILD_SERVICE_URL = 'https://staging-api.corvanide.space';
+const BUILD_SERVICE_URL = terminalServiceOrigin;
 
 function getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('fiberdev_access_token');
+    return tokenStorage.get();
 }
 
 export function useWorkspaceBuild(workspaceId: string): UseWorkspaceBuildResult {
@@ -110,7 +112,7 @@ export function useWorkspaceBuild(workspaceId: string): UseWorkspaceBuildResult 
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
             timeout: 10000,
-            auth: token ? { token } : undefined,
+            auth: (cb: (data: object) => void) => cb({ token: getAccessToken() }),
             query: { workspaceId },
         });
         socketRef.current = socket;

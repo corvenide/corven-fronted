@@ -2,116 +2,147 @@
 
 import {
     createContext,
-    ReactNode,
+    type ReactNode,
     useCallback,
     useEffect,
     useMemo,
     useState,
 } from 'react';
 
-import { authApi } from '../api/auth.api';
+import { ccc } from '@ckb-ccc/connector-react';
 
+import { queryClient } from '../../../lib/query-client';
 import {
-    AuthUser,
-    LoginInput,
-    RegisterInput,
-    WalletLoginInput,
-} from '../types/auth.types';
-
-import { tokenStorage } from '../../../lib/token-storage';
+    endSession,
+    getSession,
+    onSessionChange,
+    refreshSession,
+    type SessionEndReason,
+    startSession,
+} from '../../../lib/session';
+import { tokenExpiry, tokenStorage } from '../../../lib/token-storage';
+import { authApi } from '../api/auth.api';
+import type { AuthUser, WalletLoginInput } from '../types/auth.types';
 
 export interface AuthContextValue {
     user: AuthUser | null;
     isAuthenticated: boolean;
     isInitializing: boolean;
+    /** Why the last session ended, so the sign-in page can explain it. */
+    endReason: SessionEndReason | null;
 
-    login: (input: LoginInput) => Promise<void>;
-    register: (input: RegisterInput) => Promise<void>;
     walletLogin: (input: WalletLoginInput) => Promise<void>;
-
-    logout: () => void;
+    logout: () => Promise<void>;
+    logoutEverywhere: () => Promise<void>;
     refreshUser: () => Promise<void>;
 }
 
-export const AuthContext =
-    createContext<AuthContextValue | null>(null);
+export const AuthContext = createContext<AuthContextValue | null>(null);
 
-interface AuthProviderProps {
-    children: ReactNode;
-}
+export function AuthProvider({ children }: { children: ReactNode }) {
+    const { disconnect } = ccc.useCcc();
 
-export function AuthProvider({
-    children,
-}: AuthProviderProps) {
-    const [user, setUser] = useState<AuthUser | null>(null);
-    const [isInitializing, setIsInitializing] =
-        useState(true);
+    const [user, setUser] = useState<AuthUser | null>(() => getSession()?.user ?? null);
+    const [isInitializing, setIsInitializing] = useState(true);
+    const [endReason, setEndReason] = useState<SessionEndReason | null>(null);
 
-    const refreshUser = useCallback(async () => {
-        const token = tokenStorage.get();
+    // Mirror the session module (this tab and other tabs) into React state.
+    useEffect(
+        () =>
+            onSessionChange((session, reason) => {
+                setUser(session?.user ?? null);
 
-        if (!token) {
-            setUser(null);
-            return;
-        }
+                if (session) {
+                    setEndReason(null);
+                } else {
+                    if (reason) setEndReason(reason);
+                    queryClient.clear();
+                }
+            }),
+        [],
+    );
 
-        try {
-            const currentUser =
-                await authApi.getCurrentUser();
+    // Restore the session from the refresh cookie on first load.
+    useEffect(() => {
+        let cancelled = false;
 
-            setUser(currentUser);
-        } catch {
-            tokenStorage.remove();
-            setUser(null);
-        }
+        refreshSession()
+            .catch(() => null)
+            .finally(() => {
+                if (!cancelled) setIsInitializing(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
+    // Refresh shortly before the access token expires, and again whenever
+    // the tab comes back into view (timers are throttled in background tabs).
     useEffect(() => {
-        const initializeAuth = async () => {
-            try {
-                await refreshUser();
-            } finally {
-                setIsInitializing(false);
+        let timer: number | undefined;
+
+        const schedule = (token: string | null) => {
+            window.clearTimeout(timer);
+            if (!token) return;
+
+            const exp = tokenExpiry(token);
+            if (!exp) return;
+
+            const delay = Math.max(5_000, (exp - 60) * 1000 - Date.now());
+            timer = window.setTimeout(() => {
+                void refreshSession().catch(() => undefined);
+            }, delay);
+        };
+
+        const onVisible = () => {
+            if (document.visibilityState !== 'visible') return;
+
+            const token = tokenStorage.get();
+            const exp = token ? tokenExpiry(token) : null;
+
+            if (token && exp && exp - Date.now() / 1000 < 90) {
+                void refreshSession().catch(() => undefined);
             }
         };
 
-        void initializeAuth();
-    }, [refreshUser]);
+        schedule(tokenStorage.get());
+        const unsubscribe = tokenStorage.subscribe(schedule);
+        document.addEventListener('visibilitychange', onVisible);
 
-    const login = useCallback(
-        async (input: LoginInput) => {
-            const response = await authApi.login(input);
+        return () => {
+            window.clearTimeout(timer);
+            unsubscribe();
+            document.removeEventListener('visibilitychange', onVisible);
+        };
+    }, []);
 
-            tokenStorage.set(response.accessToken);
-            setUser(response.user);
-        },
-        [],
-    );
+    const walletLogin = useCallback(async (input: WalletLoginInput) => {
+        const response = await authApi.walletLogin(input);
+        startSession(response);
+    }, []);
 
-    const register = useCallback(
-        async (input: RegisterInput) => {
-            const response = await authApi.register(input);
+    const logout = useCallback(async () => {
+        await endSession();
 
-            tokenStorage.set(response.accessToken);
-            setUser(response.user);
-        },
-        [],
-    );
+        try {
+            await disconnect();
+        } catch {
+            /* wallet already disconnected */
+        }
+    }, [disconnect]);
 
-    const walletLogin = useCallback(
-        async (input: WalletLoginInput) => {
-            const response =
-                await authApi.walletLogin(input);
+    const logoutEverywhere = useCallback(async () => {
+        try {
+            await authApi.logoutEverywhere();
+        } finally {
+            await logout();
+        }
+    }, [logout]);
 
-            tokenStorage.set(response.accessToken);
-            setUser(response.user);
-        },
-        [],
-    );
-
-    const logout = useCallback(() => {
-        tokenStorage.remove();
-        setUser(null);
+    const refreshUser = useCallback(async () => {
+        const fresh = await authApi.getCurrentUser();
+        setUser(fresh);
     }, []);
 
     const value = useMemo<AuthContextValue>(
@@ -119,26 +150,14 @@ export function AuthProvider({
             user,
             isAuthenticated: Boolean(user),
             isInitializing,
-            login,
-            register,
+            endReason,
             walletLogin,
             logout,
+            logoutEverywhere,
             refreshUser,
         }),
-        [
-            user,
-            isInitializing,
-            login,
-            register,
-            walletLogin,
-            logout,
-            refreshUser,
-        ],
+        [user, isInitializing, endReason, walletLogin, logout, logoutEverywhere, refreshUser],
     );
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

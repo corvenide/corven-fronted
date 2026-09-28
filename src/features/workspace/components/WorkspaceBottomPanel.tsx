@@ -6,6 +6,8 @@ import {
     TerminalSquare,
     X,
     Hammer,
+    Rocket,
+    Bug,
 } from 'lucide-react';
 
 import React, { useState } from 'react';
@@ -13,13 +15,15 @@ import React, { useState } from 'react';
 import { TerminalPanel } from './TerminalPanel';
 import { TestsPanel } from './TestsPanel';
 import { BuildPanel } from './BuildPanel';
+import { DeployPanel } from '../../deploy/DeployPanel';
+import { DebugPanel } from '../../debugger/DebugPanel';
 
 type BottomPanelTab =
     | 'terminal'
     | 'tests'
     | 'build'
-    | 'output'
-    | 'problems';
+    | 'deploy'
+    | 'debug';
 
 interface WorkspaceBottomPanelProps {
     workspaceId: string;
@@ -79,30 +83,19 @@ export function WorkspaceBottomPanel({
                     />
 
                     <PanelTab
-                        label="Output"
-                        active={
-                            activeTab ===
-                            'output'
-                        }
-                        onClick={() =>
-                            setActiveTab(
-                                'output',
-                            )
-                        }
+                        label="Deploy"
+                        active={activeTab === 'deploy'}
+                        icon={<Rocket className="h-3.5 w-3.5" />}
+                        onClick={() => setActiveTab('deploy')}
                     />
 
                     <PanelTab
-                        label="Problems"
-                        active={
-                            activeTab ===
-                            'problems'
-                        }
-                        onClick={() =>
-                            setActiveTab(
-                                'problems',
-                            )
-                        }
+                        label="Debug"
+                        active={activeTab === 'debug'}
+                        icon={<Bug className="h-3.5 w-3.5" />}
+                        onClick={() => setActiveTab('debug')}
                     />
+
                 </div>
 
                 <button
@@ -133,19 +126,14 @@ export function WorkspaceBottomPanel({
                     <BuildPanel workspaceId={workspaceId} />
                 </div>
 
-                {activeTab === 'output' && (
-                    <PlaceholderPanel
-                        title="Output"
-                        description="Build and runtime output will appear here."
-                    />
-                )}
+                <div className={activeTab === 'deploy' ? 'h-full' : 'hidden'}>
+                    <DeployPanel workspaceId={workspaceId} active={activeTab === 'deploy'} />
+                </div>
 
-                {activeTab === 'problems' && (
-                    <PlaceholderPanel
-                        title="Problems"
-                        description="Compiler errors, warnings, and diagnostics will appear here."
-                    />
-                )}
+                <div className={activeTab === 'debug' ? 'h-full' : 'hidden'}>
+                    <DebugPanel workspaceId={workspaceId} active={activeTab === 'debug'} />
+                </div>
+
             </div>
         </section>
     );
@@ -178,27 +166,5 @@ function PanelTab({
             {icon}
             {label}
         </button>
-    );
-}
-
-function PlaceholderPanel({
-    title,
-    description,
-}: {
-    title: string;
-    description: string;
-}) {
-    return (
-        <div className="flex h-full items-center justify-center p-6 text-center">
-            <div>
-                <p className="text-sm font-medium text-gray-300">
-                    {title}
-                </p>
-
-                <p className="mt-1 text-xs text-gray-600">
-                    {description}
-                </p>
-            </div>
-        </div>
     );
 }

@@ -1,18 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import type { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 
 import type { IdePanel } from '../types/workspace.types';
 
 import { FileExplorerPanel } from './FileExplorerPanel';
 import { EditorPanel } from './EditorPanel';
-import { AIPanel } from './AIPanel';
+import { AIPanel, type EditorContext } from './AIPanel';
+import { AssistantBridgeContext, type AssistantRequest } from '../../ai/assistant-bridge';
 import { WorkspaceBottomPanel } from './WorkspaceBottomPanel';
 
 import { useWorkspaceFiles } from '../hooks/useWorkspaceFiles';
+import { moleculeApi, type MoleculeLanguage } from '../api/molecule.api';
 import { useActiveFile } from '../hooks/useActiveFile';
 import { useResizablePanel } from '../hooks/useResizablePanel';
 import { ResizeHandle } from './ResizeHandle';
+import { useWorkspaceRuntime } from './WorkspaceStartup';
 
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 
@@ -23,18 +27,79 @@ interface WorkspaceIdeProps {
 
 export function WorkspaceIde({
     workspaceId,
-    activePanel,
+    activePanel: _activePanel,
 }: WorkspaceIdeProps) {
     const [terminalVisible, setTerminalVisible] = useState(true);
     const [aiPanelVisible, setAiPanelVisible] = useState(true);
 
     const files = useWorkspaceFiles(workspaceId);
+    const runtime = useWorkspaceRuntime();
 
     const editor = useActiveFile({
         entries: files.entries,
         readFile: files.readFile,
         updateFile: files.updateFile,
     });
+
+    // -- Molecule -------------------------------------------------------------
+    const generateBindings = useCallback(
+        async (language: MoleculeLanguage) => {
+            const path = editor.activeFile?.path;
+            if (!path) throw new Error('Open a .mol schema first.');
+            // moleculec reads the file from the workspace, so save edits first.
+            if (editor.isDirty) await editor.save();
+            const result = await moleculeApi.generate(workspaceId, path, language);
+            void files.refreshFiles();
+            return result;
+        },
+        [editor, files, workspaceId],
+    );
+
+    // -- Claude ---------------------------------------------------------------
+    const editorRef = useRef<ReactCodeMirrorRef>(null);
+    const [assistantRequest, setAssistantRequest] = useState<AssistantRequest | null>(null);
+
+    // Read at send time, so the latest edits and selection are used.
+    const editorStateRef = useRef({ path: '', content: '' });
+    editorStateRef.current = { path: editor.activeFile?.path ?? '', content: editor.content };
+
+    const getEditorContext = useCallback((): EditorContext | null => {
+        const { path, content } = editorStateRef.current;
+        if (!path) return null;
+
+        const view = editorRef.current?.view;
+        const selection = view
+            ? view.state.selection.ranges
+                  .filter((range) => !range.empty)
+                  .map((range) => view.state.sliceDoc(range.from, range.to))
+                  .join('\n')
+            : '';
+
+        return { path, content, selection };
+    }, []);
+
+    const insertCode = useCallback((code: string) => {
+        const view = editorRef.current?.view;
+        if (!view) return;
+
+        const { from, to } = view.state.selection.main;
+        view.dispatch({
+            changes: { from, to, insert: code },
+            selection: { anchor: from + code.length },
+            scrollIntoView: true,
+        });
+        view.focus();
+    }, []);
+
+    const assistantBridge = useMemo(
+        () => ({
+            ask: (request: Omit<AssistantRequest, 'id'>) => {
+                setAiPanelVisible(true);
+                setAssistantRequest({ ...request, id: Date.now() });
+            },
+        }),
+        [],
+    );
 
     // Left file-tree sidebar: drag its right edge.
     const sidebar = useResizablePanel({
@@ -86,8 +151,8 @@ export function WorkspaceIde({
                 className="flex h-full shrink-0 flex-col overflow-hidden bg-[#161b22]"
                 style={{ width: sidebar.size }}
             >
-                {activePanel === 'files' && (
-                    <FileExplorerPanel
+                {/* Only the file tree exists today; other panels were placeholders. */}
+                <FileExplorerPanel
                         entries={files.entries}
                         activePath={editor.activePath}
                         isRefreshing={files.isRefreshing}
@@ -112,25 +177,8 @@ export function WorkspaceIde({
                             await files.deleteFile(path);
                         }}
                     />
-                )}
 
-                {activePanel === 'search' && (
-                    <div className="p-4 text-xs text-gray-500">
-                        Search panel comes here.
-                    </div>
-                )}
-
-                {activePanel === 'git' && (
-                    <div className="p-4 text-xs text-gray-500">
-                        Source control panel comes here.
-                    </div>
-                )}
-
-                {activePanel === 'debug' && (
-                    <div className="p-4 text-xs text-gray-500">
-                        Run and debug panel comes here.
-                    </div>
-                )}
+                {runtime.devnet}
             </aside>
 
             <ResizeHandle
@@ -152,6 +200,8 @@ export function WorkspaceIde({
                             isLoading={editor.isLoadingFile}
                             onChange={editor.setContent}
                             onSave={editor.save}
+                            editorRef={editorRef}
+                            onGenerateBindings={runtime.ready ? generateBindings : undefined}
                         />
                     </div>
 
@@ -162,10 +212,18 @@ export function WorkspaceIde({
                                 className="absolute bottom-0 left-0 right-0 overflow-hidden bg-[#0d1117] border-t border-[#30363d]"
                                 style={{ height: terminal.size }}
                             >
-                                <WorkspaceBottomPanel
-                                    workspaceId={workspaceId}
-                                    onClose={() => setTerminalVisible(false)}
-                                />
+                                {runtime.ready ? (
+                                    <AssistantBridgeContext.Provider value={assistantBridge}>
+                                        <WorkspaceBottomPanel
+                                            workspaceId={workspaceId}
+                                            onClose={() => setTerminalVisible(false)}
+                                        />
+                                    </AssistantBridgeContext.Provider>
+                                ) : (
+                                    <div className="flex h-full items-center justify-center text-[12.5px] text-gray-500">
+                                        The terminal, build and tests connect when the workspace is running.
+                                    </div>
+                                )}
                             </div>
                             {/* Resize handle positioned at the top of the terminal overlay */}
                             <div
@@ -227,7 +285,14 @@ export function WorkspaceIde({
                     className="flex h-full shrink-0 flex-col overflow-hidden border-l border-[#30363d] bg-[#161b22]"
                     style={{ width: aiPanel.size }}
                 >
-                    <AIPanel onCollapse={() => setAiPanelVisible(false)} />
+                    <AIPanel
+                        workspaceId={workspaceId}
+                        onCollapse={() => setAiPanelVisible(false)}
+                        getEditorContext={getEditorContext}
+                        onInsertCode={editor.activeFile ? insertCode : undefined}
+                        request={assistantRequest}
+                        onRequestHandled={() => setAssistantRequest(null)}
+                    />
                 </aside>
             )}
         </div>

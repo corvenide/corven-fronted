@@ -6,6 +6,7 @@ import {
 } from 'react-router-dom';
 
 import { WorkspaceIde } from '../features/workspace/components/WorkspaceIde';
+import { WorkspaceStartup } from '../features/workspace/components/WorkspaceStartup';
 
 import type {
     IdePanel,
@@ -49,9 +50,12 @@ export default function IdePage() {
             : 'files';
 
     return (
-        <WorkspaceIde
-            workspaceId={workspaceId}
-            activePanel={activePanel}
-        />
+        // key: reset start-up state when switching between workspaces.
+        <WorkspaceStartup key={workspaceId} workspaceId={workspaceId}>
+            <WorkspaceIde
+                workspaceId={workspaceId}
+                activePanel={activePanel}
+            />
+        </WorkspaceStartup>
     );
 }

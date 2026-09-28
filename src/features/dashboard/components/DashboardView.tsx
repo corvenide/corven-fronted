@@ -1,609 +1,539 @@
 // src/features/dashboard/components/DashboardView.tsx
-import { useState } from 'react';
+//
+// Workspace dashboard. Everything shown is derived from the user's real
+// workspaces: counts, statuses, start progress, errors and timestamps.
+
+import { useMemo, useState, type ReactNode } from 'react';
 import {
-    PlusSquare,
-    DownloadCloud,
-    LayoutTemplate,
-    Terminal,
-    Box,
     AlertTriangle,
-    History,
-    Cpu,
-    HardDrive,
-    Activity,
+    ArrowUpRight,
+    Box,
+    Clock,
     Loader2,
     Play,
+    Plus,
+    RotateCw,
+    Search,
     Square,
     Trash2,
-    ExternalLink,
 } from 'lucide-react';
 
-import type { ActivityItem, NodeMetrics } from '../../../types';
-import type { Workspace } from '../../workspace/types/workspace.types';
+import type { Workspace, WorkspaceStatus } from '../../workspace/types/workspace.types';
 import { CreateWorkspaceModal } from './CreateWorkspaceModal';
-import { ComingSoonModal } from './ComingSoonModal';
 import { ConfirmDialog } from './ConfirmDialog';
-import { formatRelativeTime } from '../utils/formatRelativeTime';
 
 interface DashboardViewProps {
-    metrics: NodeMetrics;
-    nodeStatus: string;
+    userName: string | null;
 
     workspaces: Workspace[];
-    isLoadingWorkspaces: boolean;
+    isLoading: boolean;
+    isError: boolean;
+    onRetry: () => void;
+
     startingWorkspaceId?: string;
     stoppingWorkspaceId?: string;
     removingWorkspaceId?: string;
+
+    onOpenWorkspace: (workspaceId: string) => void;
     onStartWorkspace: (workspaceId: string) => void;
     onStopWorkspace: (workspaceId: string) => void;
     onRemoveWorkspace: (workspaceId: string) => void;
-
-    onNavigateToIde: (workspaceId?: string) => void;
-    onNavigateToNodes: () => void;
 }
 
-// NOTE: this assumes `Workspace.status` is one of these four — matches
-// the 'PROVISIONING' check already in useWorkspace.ts. Adjust the map
-// below if your backend uses different status strings.
-const STATUS_DISPLAY: Record<
-    string,
-    { label: string; className: string; pulse: boolean }
-> = {
-    RUNNING: {
-        label: 'Active',
-        className:
-            'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-        pulse: true,
-    },
-    PROVISIONING: {
-        label: 'Provisioning',
-        className:
-            'border-[#1f6feb]/30 bg-[#1f6feb]/10 text-[#58a6ff]',
-        pulse: true,
-    },
-    STOPPED: {
-        label: 'Stopped',
-        className:
-            'border-gray-500/30 bg-gray-500/10 text-gray-400',
-        pulse: false,
-    },
-    ERROR: {
-        label: 'Error',
-        className:
-            'border-rose-500/30 bg-rose-500/10 text-rose-400',
-        pulse: false,
-    },
+type Filter = 'all' | 'running' | 'stopped' | 'failed';
+
+const STOPPED_STATES: WorkspaceStatus[] = ['STOPPED', 'IDLE', 'PENDING'];
+
+const STATUS: Record<string, { label: string; dot: string; text: string }> = {
+    RUNNING: { label: 'Running', dot: 'bg-emerald-400', text: 'text-emerald-300' },
+    PROVISIONING: { label: 'Starting', dot: 'bg-[#58a6ff] animate-pulse', text: 'text-[#79b8ff]' },
+    IDLE: { label: 'Idle', dot: 'bg-amber-400', text: 'text-amber-300' },
+    STOPPED: { label: 'Stopped', dot: 'bg-gray-500', text: 'text-gray-400' },
+    PENDING: { label: 'Not started', dot: 'bg-gray-600', text: 'text-gray-400' },
+    FAILED: { label: 'Failed', dot: 'bg-rose-400', text: 'text-rose-300' },
 };
 
-// Placeholder until there's a real activity/audit-log endpoint.
-const activities: ActivityItem[] = [
-    {
-        id: 'act-1',
-        title: 'Deployment successful',
-        subtitle: 'fiber-blog-api · production',
-        type: 'success',
-        timestamp: '14 minutes ago',
-    },
-    {
-        id: 'act-2',
-        title: 'New build triggered',
-        subtitle: 'ecommerce-v3-core · push',
-        type: 'info',
-        timestamp: '1 hour ago',
-    },
-    {
-        id: 'act-3',
-        title: 'Build failed',
-        subtitle: 'auth-server · CI/CD',
-        type: 'error',
-        timestamp: '3 hours ago',
-    },
-];
+const STAGE_LABEL: Record<string, string> = {
+    preparing: 'Preparing storage',
+    starting: 'Starting containers',
+    project: 'Setting up project',
+};
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+function timeAgo(input?: string | null): string {
+    if (!input) return '—';
+    const date = new Date(input);
+    if (Number.isNaN(date.getTime())) return '—';
+
+    const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatDate(input?: string | null): string {
+    if (!input) return '—';
+    const date = new Date(input);
+    return Number.isNaN(date.getTime())
+        ? '—'
+        : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function lastActive(workspace: Workspace): string | null {
+    return workspace.lastActivityAt ?? workspace.lastStartedAt ?? workspace.lastStoppedAt ?? workspace.createdAt ?? null;
+}
+
+function statusDetail(workspace: Workspace): string {
+    switch (workspace.status) {
+        case 'PROVISIONING':
+            return `${STAGE_LABEL[workspace.provisionStage ?? 'preparing'] ?? 'Starting'}…`;
+        case 'FAILED':
+            return workspace.provisionError?.split('\n')[0] ?? 'The last start failed';
+        case 'IDLE':
+            return 'Stopped after inactivity · opens instantly';
+        case 'PENDING':
+            return 'Starts when you open it';
+        case 'STOPPED':
+            return `Stopped ${timeAgo(workspace.lastStoppedAt)}`;
+        case 'RUNNING':
+            return `Started ${timeAgo(workspace.lastStartedAt)}`;
+        default:
+            return '';
+    }
+}
+
+interface ActivityEvent {
+    id: string;
+    at: string;
+    text: ReactNode;
+    tone: 'neutral' | 'good' | 'bad' | 'muted';
+}
+
+/** Recent events reconstructed from each workspace's timestamps. */
+function buildActivity(workspaces: Workspace[]): ActivityEvent[] {
+    const events: ActivityEvent[] = [];
+
+    for (const ws of workspaces) {
+        const name = <span className="font-medium text-gray-200">{ws.name}</span>;
+
+        events.push({ id: `${ws.id}-created`, at: ws.createdAt, text: <>Created {name}</>, tone: 'neutral' });
+
+        if (ws.lastStartedAt) {
+            events.push({ id: `${ws.id}-started`, at: ws.lastStartedAt, text: <>Started {name}</>, tone: 'good' });
+        }
+
+        if (ws.lastStoppedAt && ws.status !== 'RUNNING' && ws.status !== 'PROVISIONING') {
+            events.push({
+                id: `${ws.id}-stopped`,
+                at: ws.lastStoppedAt,
+                text: ws.status === 'IDLE' ? <>{name} stopped after inactivity</> : <>Stopped {name}</>,
+                tone: 'muted',
+            });
+        }
+
+        if (ws.status === 'FAILED') {
+            events.push({ id: `${ws.id}-failed`, at: ws.updatedAt, text: <>{name} failed to start</>, tone: 'bad' });
+        }
+    }
+
+    return events
+        .filter((event) => !Number.isNaN(new Date(event.at).getTime()))
+        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+        .slice(0, 8);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pieces                                                             */
+/* ------------------------------------------------------------------ */
+
+function Stat({ label, value, tone = 'default' }: { label: string; value: number | string; tone?: 'default' | 'good' | 'info' | 'bad' }) {
+    const color =
+        tone === 'good' ? 'text-emerald-300' : tone === 'info' ? 'text-[#79b8ff]' : tone === 'bad' ? 'text-rose-300' : 'text-white';
+
+    return (
+        <div className="rounded-lg border border-[#30363d] bg-[#161b22] px-4 py-3.5">
+            <div className="text-[12px] text-gray-400">{label}</div>
+            <div className={`mt-1 font-mono text-[22px] font-semibold tabular-nums ${color}`}>{value}</div>
+        </div>
+    );
+}
+
+function IconButton({
+    label,
+    onClick,
+    disabled,
+    danger,
+    children,
+}: {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    danger?: boolean;
+    children: ReactNode;
+}) {
+    return (
+        <button
+            type="button"
+            title={label}
+            aria-label={label}
+            onClick={(event) => {
+                event.stopPropagation();
+                onClick();
+            }}
+            disabled={disabled}
+            className={`flex h-8 w-8 items-center justify-center rounded-md text-gray-400 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                danger ? 'hover:bg-rose-500/10 hover:text-rose-300' : 'hover:bg-[#21262d] hover:text-gray-100'
+            }`}
+        >
+            {children}
+        </button>
+    );
+}
+
+/* ------------------------------------------------------------------ */
+/*  View                                                               */
+/* ------------------------------------------------------------------ */
 
 export default function DashboardView({
-    metrics,
-    nodeStatus,
+    userName,
     workspaces,
-    isLoadingWorkspaces,
+    isLoading,
+    isError,
+    onRetry,
     startingWorkspaceId,
     stoppingWorkspaceId,
     removingWorkspaceId,
+    onOpenWorkspace,
     onStartWorkspace,
     onStopWorkspace,
     onRemoveWorkspace,
-    onNavigateToIde,
-    onNavigateToNodes,
 }: DashboardViewProps) {
-    const [isCreateModalOpen, setCreateModalOpen] =
-        useState(false);
-    const [createModalTemplate, setCreateModalTemplate] =
-        useState<string | undefined>(undefined);
-    const [isImportModalOpen, setImportModalOpen] =
-        useState(false);
-    const [workspaceToRemove, setWorkspaceToRemove] =
-        useState<Workspace | null>(null);
+    const [isCreateOpen, setCreateOpen] = useState(false);
+    const [toRemove, setToRemove] = useState<Workspace | null>(null);
+    const [query, setQuery] = useState('');
+    const [filter, setFilter] = useState<Filter>('all');
 
-    const openCreateModal = (templateId?: string) => {
-        setCreateModalTemplate(templateId);
-        setCreateModalOpen(true);
-    };
+    const counts = useMemo(
+        () => ({
+            all: workspaces.length,
+            running: workspaces.filter((w) => w.status === 'RUNNING').length,
+            starting: workspaces.filter((w) => w.status === 'PROVISIONING').length,
+            stopped: workspaces.filter((w) => STOPPED_STATES.includes(w.status)).length,
+            failed: workspaces.filter((w) => w.status === 'FAILED').length,
+        }),
+        [workspaces],
+    );
 
-    const handleRemoveClick = (workspace: Workspace) => {
-        setWorkspaceToRemove(workspace);
-    };
+    const visible = useMemo(() => {
+        const q = query.trim().toLowerCase();
 
-    const handleConfirmRemove = () => {
-        if (workspaceToRemove) {
-            onRemoveWorkspace(workspaceToRemove.id);
-            setWorkspaceToRemove(null);
-        }
-    };
+        return [...workspaces]
+            .filter((w) => {
+                if (filter === 'running') return w.status === 'RUNNING' || w.status === 'PROVISIONING';
+                if (filter === 'stopped') return STOPPED_STATES.includes(w.status);
+                if (filter === 'failed') return w.status === 'FAILED';
+                return true;
+            })
+            .filter((w) => !q || w.name.toLowerCase().includes(q))
+            .sort((a, b) => new Date(lastActive(b) ?? 0).getTime() - new Date(lastActive(a) ?? 0).getTime());
+    }, [workspaces, filter, query]);
 
-    const handleCancelRemove = () => {
-        setWorkspaceToRemove(null);
-    };
+    const activity = useMemo(() => buildActivity(workspaces), [workspaces]);
 
-    const handleWorkspaceClick = (workspace: Workspace) => {
-        if (workspace.status === 'RUNNING') {
-            onNavigateToIde(workspace.id);
-            return;
-        }
+    const filters: { key: Filter; label: string; count: number }[] = [
+        { key: 'all', label: 'All', count: counts.all },
+        { key: 'running', label: 'Running', count: counts.running + counts.starting },
+        { key: 'stopped', label: 'Stopped', count: counts.stopped },
+        { key: 'failed', label: 'Failed', count: counts.failed },
+    ];
 
-        if (workspace.status === 'PROVISIONING') {
-            alert('Workspace is still starting. Please wait until it is running.');
-            return;
-        }
-
-        if (workspace.status === 'STOPPED') {
-            onStartWorkspace(workspace.id);
-            return;
-        }
-    };
+    const hasWorkspaces = workspaces.length > 0;
 
     return (
-        <div className="text-gray-100 min-h-screen bg-[#0d1117] p-8 pb-20 select-none">
-            <div className="max-w-7xl mx-auto space-y-10 pt-6">
-                {/* Welcome Dashboard Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+        <div className="min-h-full bg-[#0d1117] px-5 pb-16 pt-8 text-gray-200 sm:px-8">
+            <div className="mx-auto max-w-[1200px]">
+                {/* ------------------------------------------------ Header */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h1 className="font-headline-md text-3xl font-extrabold text-white tracking-tight">
-                            Dashboard
-                        </h1>
-                        <p className="text-gray-400 text-sm mt-1">
-                            Welcome back, dev. Your workspace
-                            infrastructure is currently
-                            stable.
+                        <h1 className="text-[24px] font-semibold tracking-[-0.01em] text-white">Workspaces</h1>
+                        <p className="mt-1 text-[14px] text-gray-400">
+                            Your CKB development environments
                         </p>
                     </div>
-
-                    <div className="flex gap-4">
-                        <div className="flex items-center gap-2 bg-[#161b22] border border-[#30363d] px-4 py-2 rounded-lg">
-                            <span
-                                className={`w-2 h-2 rounded-full ${nodeStatus ===
-                                    'Operational'
-                                    ? 'bg-emerald-500 animate-pulse'
-                                    : 'bg-amber-500 animate-pulse'
-                                    }`}
-                            />
-                            <span className="text-xs font-mono uppercase text-gray-300">
-                                {nodeStatus ===
-                                    'Operational'
-                                    ? 'Systems Operational'
-                                    : `Status: ${nodeStatus}`}
-                            </span>
-                        </div>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setCreateOpen(true)}
+                        className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-md bg-[#238636] px-3.5 text-[13.5px] font-medium text-white transition-colors hover:bg-[#2ea043] sm:self-auto"
+                    >
+                        <Plus className="h-4 w-4" />
+                        New workspace
+                    </button>
                 </div>
 
-                {/* Bento Grid Layout */}
-                <div className="grid grid-cols-12 gap-6">
-                    {/* Column Left */}
-                    <div className="col-span-12 lg:col-span-3 flex flex-col gap-6">
-                        {/* Quick Actions Card */}
-                        <div className="bg-[#161b22]/70 border border-[#30363d] rounded-2xl p-6 relative">
-                            <h2 className="font-headline-sm text-sm font-bold text-[#58a6ff] uppercase tracking-wider mb-4">
-                                Quick Actions
-                            </h2>
-                            <div className="flex flex-col gap-3">
-                                <button
-                                    onClick={() =>
-                                        openCreateModal()
-                                    }
-                                    className="flex items-center gap-3 w-full p-3 rounded-xl bg-[#1f6feb] text-white font-semibold text-xs transition-all hover:bg-[#388bfd] active:scale-95 cursor-pointer shadow-lg shadow-[#1f6feb]/20"
-                                >
-                                    <PlusSquare className="h-4 w-4" />
-                                    <span>
-                                        Create Workspace
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() =>
-                                        setImportModalOpen(
-                                            true,
-                                        )
-                                    }
-                                    className="flex items-center gap-3 w-full p-3 rounded-xl bg-[#21262d] border border-[#30363d] hover:border-gray-500 text-gray-200 font-semibold text-xs transition-all hover:bg-[#30363d] active:scale-95 cursor-pointer"
-                                >
-                                    <DownloadCloud className="h-4 w-4 text-[#58a6ff]" />
-                                    <span>
-                                        Import Repository
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() =>
-                                        openCreateModal(
-                                            'rust-empty',
-                                        )
-                                    }
-                                    className="flex items-center gap-3 w-full p-3 rounded-xl bg-[#21262d] border border-[#30363d] hover:border-gray-500 text-gray-200 font-semibold text-xs transition-all hover:bg-[#30363d] active:scale-95 cursor-pointer"
-                                >
-                                    <LayoutTemplate className="h-4 w-4 text-[#ff7b72]" />
-                                    <span>Use Template</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Resources Widget Card */}
-                        <div className="bg-[#161b22]/70 border border-[#30363d] rounded-2xl p-6">
-                            <h2 className="font-headline-sm text-sm font-bold text-white uppercase tracking-wider mb-5">
-                                Resource Usage
-                            </h2>
-                            <div className="space-y-5">
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-xs text-gray-400 font-mono">
-                                        <span className="flex items-center gap-1">
-                                            <Cpu className="h-3 w-3 text-[#58a6ff]" />{' '}
-                                            CPU Nodes
-                                        </span>
-                                        <span className="font-bold text-white">
-                                            {metrics.cpu}%
-                                        </span>
-                                    </div>
-                                    <div className="w-full h-1.5 bg-[#0d1117] rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-[#1f6feb] rounded-full shadow-[0_0_8px_rgba(31,111,235,0.6)] transition-all duration-1000"
-                                            style={{
-                                                width: `${metrics.cpu}%`,
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-xs text-gray-400 font-mono">
-                                        <span className="flex items-center gap-1">
-                                            <HardDrive className="h-3 w-3 text-[#a5d6ff]" />{' '}
-                                            RAM Allocation
-                                        </span>
-                                        <span className="font-bold text-white">
-                                            {metrics.memory}{' '}
-                                            / 4.0 GB
-                                        </span>
-                                    </div>
-                                    <div className="w-full h-1.5 bg-[#0d1117] rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-[#58a6ff] rounded-full transition-all duration-1000"
-                                            style={{
-                                                width: '35%',
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-xs text-gray-400 font-mono">
-                                        <span className="flex items-center gap-1">
-                                            <Activity className="h-3 w-3 text-[#ff7b72]" />{' '}
-                                            Bandwidth
-                                        </span>
-                                        <span className="font-bold text-white">
-                                            {metrics.network}
-                                            %
-                                        </span>
-                                    </div>
-                                    <div className="w-full h-1.5 bg-[#0d1117] rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-[#ff7b72] rounded-full transition-all duration-1000"
-                                            style={{
-                                                width: `${metrics.network}%`,
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                {/* ------------------------------------------------ Stats */}
+                {hasWorkspaces && (
+                    <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        <Stat label="Total workspaces" value={counts.all} />
+                        <Stat label="Running" value={counts.running} tone={counts.running ? 'good' : 'default'} />
+                        <Stat label="Starting" value={counts.starting} tone={counts.starting ? 'info' : 'default'} />
+                        <Stat label="Needs attention" value={counts.failed} tone={counts.failed ? 'bad' : 'default'} />
                     </div>
+                )}
 
-                    {/* Column Middle */}
-                    <div className="col-span-12 lg:col-span-6 flex flex-col gap-6">
-                        <div className="flex items-center justify-between">
-                            <h2 className="font-headline-md text-lg font-extrabold text-white">
-                                Recent Projects
-                            </h2>
-                            <button
-                                onClick={() =>
-                                    onNavigateToIde()
-                                }
-                                className="text-[#58a6ff] text-xs font-mono tracking-wider uppercase hover:underline"
-                            >
-                                View All Projects
-                            </button>
-                        </div>
-
-                        {isLoadingWorkspaces ? (
-                            <div className="flex h-40 items-center justify-center gap-2 rounded-2xl border border-[#30363d] bg-[#161b22]/70 text-gray-500">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <span className="text-xs">
-                                    Loading workspaces...
-                                </span>
+                <div className={`mt-7 grid gap-6 ${hasWorkspaces ? 'lg:grid-cols-[1fr_300px]' : ''}`}>
+                    {/* -------------------------------------------- Main list */}
+                    <section aria-label="Workspaces" className="min-w-0">
+                        {isError ? (
+                            <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-[#30363d] bg-[#161b22] px-6 py-14 text-center">
+                                <AlertTriangle className="h-5 w-5 text-amber-400" />
+                                <p className="text-[14px] text-gray-300">Couldn’t load your workspaces.</p>
+                                <button
+                                    type="button"
+                                    onClick={onRetry}
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-[#30363d] px-3 py-1.5 text-[13px] text-gray-200 hover:bg-[#21262d]"
+                                >
+                                    <RotateCw className="h-3.5 w-3.5" /> Try again
+                                </button>
                             </div>
-                        ) : workspaces.length === 0 ? (
-                            <div className="flex h-40 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[#30363d] bg-[#161b22]/40 text-center">
-                                <p className="text-xs text-gray-500">
-                                    No workspaces yet.
+                        ) : isLoading ? (
+                            <div className="overflow-hidden rounded-lg border border-[#30363d]" aria-busy="true">
+                                {[0, 1, 2].map((i) => (
+                                    <div key={i} className="flex items-center gap-4 border-b border-[#21262d] bg-[#161b22] px-4 py-4 last:border-b-0">
+                                        <div className="h-8 w-8 animate-pulse rounded-md bg-[#21262d]" />
+                                        <div className="flex-1 space-y-2">
+                                            <div className="h-3 w-40 animate-pulse rounded bg-[#21262d]" />
+                                            <div className="h-2.5 w-24 animate-pulse rounded bg-[#21262d]" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : !hasWorkspaces ? (
+                            <div className="rounded-lg border border-dashed border-[#30363d] bg-[#161b22]/60 px-6 py-16 text-center">
+                                <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg border border-[#30363d] bg-[#0d1117]">
+                                    <Box className="h-5 w-5 text-gray-300" />
+                                </div>
+                                <h2 className="mt-5 text-[17px] font-semibold text-white">Create your first workspace</h2>
+                                <p className="mx-auto mt-2 max-w-[460px] text-[14px] leading-[1.6] text-gray-400">
+                                    Each workspace comes with a CKB Rust project, the RISC-V toolchain, a terminal, and a
+                                    private devnet you can start whenever you need it.
                                 </p>
                                 <button
-                                    onClick={() =>
-                                        openCreateModal()
-                                    }
-                                    className="rounded-lg bg-[#1f6feb] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#388bfd]"
+                                    type="button"
+                                    onClick={() => setCreateOpen(true)}
+                                    className="mt-6 inline-flex h-9 items-center gap-2 rounded-md bg-[#238636] px-4 text-[13.5px] font-medium text-white hover:bg-[#2ea043]"
                                 >
-                                    Create your first
-                                    workspace
+                                    <Plus className="h-4 w-4" /> New workspace
                                 </button>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {workspaces.map((ws) => {
-                                    const status =
-                                        STATUS_DISPLAY[
-                                        ws.status
-                                        ] ??
-                                        STATUS_DISPLAY.STOPPED;
-
-                                    const isStarting =
-                                        startingWorkspaceId ===
-                                        ws.id;
-                                    const isStopping =
-                                        stoppingWorkspaceId ===
-                                        ws.id;
-                                    const isRemoving =
-                                        removingWorkspaceId ===
-                                        ws.id;
-                                    const isRunning =
-                                        ws.status ===
-                                        'RUNNING';
-
-                                    return (
-                                        <div
-                                            key={ws.id}
-                                            className="bg-[#161b22]/70 border border-[#30363d] rounded-2xl p-5 hover:border-[#58a6ff]/40 hover:shadow-lg hover:shadow-[#58a6ff]/5 transition-all group flex flex-col h-44"
-                                        >
-                                            <div className="flex justify-between items-start">
-                                                <button
-                                                    onClick={() =>
-                                                        handleWorkspaceClick(
-                                                            ws,
-                                                        )
-                                                    }
-                                                    className="p-2.5 rounded-lg border bg-[#1f6feb]/10 border-[#1f6feb]/30 text-[#58a6ff] hover:bg-[#1f6feb]/20 transition-colors cursor-pointer"
-                                                    title="Open in IDE"
-                                                >
-                                                    <ExternalLink className="h-4.5 w-4.5" />
-                                                </button>
-
-                                                <div className="flex items-center gap-2">
-                                                    <span
-                                                        className={`px-2 py-0.5 rounded border text-[10px] font-mono tracking-wider uppercase ${status.className} ${status.pulse ? 'animate-pulse' : ''}`}
-                                                    >
-                                                        {
-                                                            status.label
-                                                        }
-                                                    </span>
-                                                    <button
-                                                        onClick={() =>
-                                                            handleRemoveClick(
-                                                                ws,
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            isRemoving
-                                                        }
-                                                        className="p-1.5 rounded-lg text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        title="Remove workspace"
-                                                    >
-                                                        {isRemoving ? (
-                                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                        ) : (
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        )}
-                                                    </button>
-                                                </div>
-                                            </div>
-
+                            <>
+                                {/* Toolbar */}
+                                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div role="tablist" aria-label="Filter workspaces" className="flex rounded-md border border-[#30363d] bg-[#161b22] p-0.5">
+                                        {filters.map((item) => (
                                             <button
-                                                onClick={() =>
-                                                    handleWorkspaceClick(
-                                                        ws,
-                                                    )
-                                                }
-                                                className="text-left flex-1 cursor-pointer"
+                                                key={item.key}
+                                                type="button"
+                                                role="tab"
+                                                aria-selected={filter === item.key}
+                                                onClick={() => setFilter(item.key)}
+                                                className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-[12.5px] transition-colors ${
+                                                    filter === item.key ? 'bg-[#21262d] text-white' : 'text-gray-400 hover:text-gray-200'
+                                                }`}
                                             >
-                                                <h3 className="font-headline-sm text-sm font-bold text-white group-hover:text-[#58a6ff] transition-colors truncate">
-                                                    {
-                                                        ws.name
-                                                    }
-                                                </h3>
-                                                <p className="text-xs text-gray-500 font-mono mt-0.5">
-                                                    {formatRelativeTime(
-                                                        ws.updatedAt,
-                                                    )}
-                                                </p>
+                                                {item.label}
+                                                <span className="font-mono text-[11px] text-gray-500">{item.count}</span>
                                             </button>
+                                        ))}
+                                    </div>
+                                    <label className="relative block sm:w-64">
+                                        <span className="sr-only">Search workspaces</span>
+                                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+                                        <input
+                                            type="search"
+                                            value={query}
+                                            onChange={(event) => setQuery(event.target.value)}
+                                            placeholder="Search workspaces"
+                                            className="h-8 w-full rounded-md border border-[#30363d] bg-[#0d1117] pl-8 pr-3 text-[13px] text-gray-200 outline-none placeholder:text-gray-500 focus:border-[#1f6feb]"
+                                        />
+                                    </label>
+                                </div>
 
-                                            <div className="flex justify-end mt-2">
-                                                {isRunning ? (
-                                                    <button
-                                                        onClick={() =>
-                                                            onStopWorkspace(
-                                                                ws.id,
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            isStopping
-                                                        }
-                                                        className="flex items-center gap-1 rounded-md border border-[#30363d] px-2 py-1 text-[10px] text-gray-400 hover:border-rose-500/40 hover:text-rose-400 disabled:opacity-50 transition-colors"
-                                                    >
-                                                        {isStopping ? (
-                                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                                        ) : (
-                                                            <Square className="h-3 w-3" />
-                                                        )}
-                                                        Stop
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() =>
-                                                            onStartWorkspace(
-                                                                ws.id,
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            isStarting ||
-                                                            ws.status ===
-                                                            'PROVISIONING'
-                                                        }
-                                                        className="flex items-center gap-1 rounded-md border border-[#30363d] px-2 py-1 text-[10px] text-gray-400 hover:border-emerald-500/40 hover:text-emerald-400 disabled:opacity-50 transition-colors"
-                                                    >
-                                                        {isStarting ? (
-                                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                                        ) : (
-                                                            <Play className="h-3 w-3" />
-                                                        )}
-                                                        Start
-                                                    </button>
-                                                )}
-                                            </div>
+                                {/* Table */}
+                                <div className="overflow-hidden rounded-lg border border-[#30363d]">
+                                    <div className="hidden grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)_110px_110px_112px] gap-4 border-b border-[#30363d] bg-[#161b22] px-4 py-2.5 text-[12px] font-medium text-gray-400 md:grid">
+                                        <div>Name</div>
+                                        <div>Status</div>
+                                        <div>Last active</div>
+                                        <div>Created</div>
+                                        <div className="sr-only">Actions</div>
+                                    </div>
+
+                                    {visible.length === 0 ? (
+                                        <div className="bg-[#0d1117] px-4 py-10 text-center text-[13.5px] text-gray-500">
+                                            No workspaces match{query ? ` “${query}”` : ' this filter'}.
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+                                    ) : (
+                                        <ul>
+                                            {visible.map((ws) => {
+                                                const status = STATUS[ws.status] ?? STATUS.STOPPED;
+                                                const running = ws.status === 'RUNNING';
+                                                const starting = ws.status === 'PROVISIONING' || startingWorkspaceId === ws.id;
+                                                const stopping = stoppingWorkspaceId === ws.id;
+                                                const removing = removingWorkspaceId === ws.id;
 
-                        {/* Cinematic Network Banner */}
-                        <div
-                            onClick={onNavigateToNodes}
-                            className="relative h-44 rounded-2xl overflow-hidden border border-[#30363d] group cursor-pointer"
-                        >
-                            <img
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuD5kNPGDtVw5SkgdfCHrw1tzhIWG2NLdhNtGPUAvAJPMPu2fGP7w5O_P3nhfOglPaMEBl3s-OuB0o-mX7Wt72xEBNz300l_CE32uPZY2gaDrDosDr2kauajrpwoz-iq7PQmWCKY3styWLzX5KYKif_bPDUN8NhtfPIVn8cWg3hUaZw7PbfCOeFMA7RC5MboTy3vhp6dkFCqAouDosSSNEtd9ezVD9McAXEt-tAj_gZFVA027OACvfy1ngkgT2Snl3CxAcFobmbuy0A"
-                                alt="Global Fiber Network"
-                                referrerPolicy="no-referrer"
-                                className="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-105"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#0d1117] via-[#0d1117]/35 to-transparent" />
-                            <div className="absolute bottom-5 left-6">
-                                <h4 className="text-base font-black text-white flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                                    Global Edge Network
-                                    Active
-                                </h4>
-                                <p className="text-xs text-gray-300 mt-1">
-                                    Simulated local peer
-                                    synchronization across 24
-                                    testnet regions
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                                                return (
+                                                    <li
+                                                        key={ws.id}
+                                                        onClick={() => onOpenWorkspace(ws.id)}
+                                                        className="group grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 border-b border-[#21262d] bg-[#0d1117] px-4 py-3.5 transition-colors last:border-b-0 hover:bg-[#161b22] md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)_110px_110px_112px] md:items-center"
+                                                    >
+                                                        {/* Name */}
+                                                        <div className="flex min-w-0 items-center gap-3">
+                                                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#30363d] bg-[#161b22] font-mono text-[12px] font-semibold uppercase text-gray-300">
+                                                                {ws.name.slice(0, 2)}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(event) => {
+                                                                        event.stopPropagation();
+                                                                        onOpenWorkspace(ws.id);
+                                                                    }}
+                                                                    className="block max-w-full truncate text-left text-[14px] font-medium text-white group-hover:text-[#58a6ff]"
+                                                                >
+                                                                    {ws.name}
+                                                                </button>
+                                                                <div className="mt-0.5 text-[12px] text-gray-500 md:hidden">
+                                                                    Active {timeAgo(lastActive(ws))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
 
-                    {/* Column Right */}
-                    <div className="col-span-12 lg:col-span-3 flex flex-col gap-6">
-                        <div className="bg-[#161b22]/70 border border-[#30363d] rounded-2xl p-6 h-full flex flex-col justify-between">
-                            <div>
-                                <h2 className="font-headline-sm text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center justify-between">
-                                    <span>Activity Feed</span>
-                                    <History className="h-4 w-4 text-gray-500" />
-                                </h2>
+                                                        {/* Actions (right on mobile) */}
+                                                        <div className="row-span-2 flex items-center justify-end gap-0.5 md:order-last md:row-span-1">
+                                                            {running ? (
+                                                                <IconButton label="Stop workspace" onClick={() => onStopWorkspace(ws.id)} disabled={stopping}>
+                                                                    {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+                                                                </IconButton>
+                                                            ) : (
+                                                                <IconButton
+                                                                    label={ws.status === 'FAILED' ? 'Retry start' : 'Start workspace'}
+                                                                    onClick={() => onStartWorkspace(ws.id)}
+                                                                    disabled={starting}
+                                                                >
+                                                                    {starting ? (
+                                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                                    ) : ws.status === 'FAILED' ? (
+                                                                        <RotateCw className="h-3.5 w-3.5" />
+                                                                    ) : (
+                                                                        <Play className="h-3.5 w-3.5" />
+                                                                    )}
+                                                                </IconButton>
+                                                            )}
+                                                            <IconButton label="Delete workspace" onClick={() => setToRemove(ws)} disabled={removing} danger>
+                                                                {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                                            </IconButton>
+                                                            <IconButton label="Open in IDE" onClick={() => onOpenWorkspace(ws.id)}>
+                                                                <ArrowUpRight className="h-4 w-4" />
+                                                            </IconButton>
+                                                        </div>
 
-                                <div className="space-y-6 max-h-[360px] overflow-y-auto pr-1">
-                                    {activities.map(
-                                        (act) => (
-                                            <div
-                                                key={act.id}
-                                                className="relative pl-6 border-l border-gray-800"
-                                            >
-                                                <div
-                                                    className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full ring-4 ring-[#0d1117] ${act.type ===
-                                                        'success'
-                                                        ? 'bg-emerald-500'
-                                                        : act.type ===
-                                                            'info'
-                                                            ? 'bg-[#1f6feb]'
-                                                            : act.type ===
-                                                                'error'
-                                                                ? 'bg-rose-500'
-                                                                : 'bg-amber-400'
-                                                        }`}
-                                                />
+                                                        {/* Status */}
+                                                        <div className="min-w-0 pl-11 md:pl-0">
+                                                            <div className={`flex items-center gap-2 text-[13px] font-medium ${status.text}`}>
+                                                                <span className={`h-2 w-2 shrink-0 rounded-full ${status.dot}`} />
+                                                                {status.label}
+                                                            </div>
+                                                            <div
+                                                                className={`mt-0.5 truncate text-[12px] ${ws.status === 'FAILED' ? 'text-rose-300/70' : 'text-gray-500'}`}
+                                                                title={ws.status === 'FAILED' ? ws.provisionError ?? undefined : undefined}
+                                                            >
+                                                                {statusDetail(ws)}
+                                                            </div>
+                                                        </div>
 
-                                                <div className="flex flex-col gap-1">
-                                                    <p className="text-xs font-bold text-gray-200 leading-tight">
-                                                        {
-                                                            act.title
-                                                        }
-                                                    </p>
-                                                    <p className="text-[11px] text-gray-500 font-mono">
-                                                        {
-                                                            act.subtitle
-                                                        }
-                                                    </p>
-                                                    <p className="text-[9px] text-gray-600 font-mono mt-0.5">
-                                                        {
-                                                            act.timestamp
-                                                        }
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        ),
+                                                        {/* Last active / created (desktop) */}
+                                                        <div className="hidden text-[13px] text-gray-400 md:block">{timeAgo(lastActive(ws))}</div>
+                                                        <div className="hidden text-[13px] text-gray-400 md:block">{formatDate(ws.createdAt)}</div>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
                                     )}
                                 </div>
-                            </div>
+                            </>
+                        )}
+                    </section>
 
-                            <button
-                                onClick={onNavigateToNodes}
-                                className="w-full pt-4 mt-4 border-t border-[#30363d] text-center text-xs font-mono tracking-widest text-gray-500 hover:text-[#58a6ff] transition-colors uppercase"
-                            >
-                                View Full Live Logs
-                            </button>
-                        </div>
-                    </div>
+                    {/* -------------------------------------------- Sidebar */}
+                    {hasWorkspaces && !isError && (
+                        <aside className="flex flex-col gap-6">
+                            <section aria-labelledby="activity-heading" className="rounded-lg border border-[#30363d] bg-[#161b22]">
+                                <h2 id="activity-heading" className="flex items-center gap-2 border-b border-[#30363d] px-4 py-3 text-[13px] font-semibold text-white">
+                                    <Clock className="h-3.5 w-3.5 text-gray-400" />
+                                    Recent activity
+                                </h2>
+                                <ol className="px-4 py-2">
+                                    {activity.map((event) => (
+                                        <li key={event.id} className="flex gap-3 py-2.5">
+                                            <span
+                                                className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${
+                                                    event.tone === 'good'
+                                                        ? 'bg-emerald-400'
+                                                        : event.tone === 'bad'
+                                                          ? 'bg-rose-400'
+                                                          : event.tone === 'muted'
+                                                            ? 'bg-gray-600'
+                                                            : 'bg-[#58a6ff]'
+                                                }`}
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-[13px] text-gray-400">{event.text}</p>
+                                                <p className="mt-0.5 text-[11.5px] text-gray-500">{timeAgo(event.at)}</p>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </section>
+
+                            <section aria-labelledby="how-heading" className="rounded-lg border border-[#30363d] bg-[#161b22] px-4 py-4">
+                                <h2 id="how-heading" className="text-[13px] font-semibold text-white">How workspaces work</h2>
+                                <ul className="mt-3 space-y-2.5 text-[12.5px] leading-[1.55] text-gray-400">
+                                    <li>Opening a workspace starts it. You can edit files while it boots.</li>
+                                    <li>Workspaces stop on their own after a period of inactivity; your files are kept.</li>
+                                    <li>The devnet starts on demand from the IDE sidebar.</li>
+                                </ul>
+                            </section>
+                        </aside>
+                    )}
                 </div>
             </div>
 
             <CreateWorkspaceModal
-                isOpen={isCreateModalOpen}
-                initialTemplateId={createModalTemplate}
-                onClose={() => setCreateModalOpen(false)}
-                onCreated={(workspace) =>
-                    onStartWorkspace(workspace.id)
-                }
-            />
-
-            <ComingSoonModal
-                isOpen={isImportModalOpen}
-                onClose={() => setImportModalOpen(false)}
-                title="Import Repository"
-                description="Repo import isn't wired up on the backend yet — there's no endpoint for it on workspaceApi. This is a placeholder until that exists."
+                isOpen={isCreateOpen}
+                onClose={() => setCreateOpen(false)}
+                onCreated={(workspace) => onOpenWorkspace(workspace.id)}
             />
 
             <ConfirmDialog
-                isOpen={!!workspaceToRemove}
-                onClose={handleCancelRemove}
-                onConfirm={handleConfirmRemove}
-                title="Remove Workspace"
-                description={`Are you sure you want to remove "${workspaceToRemove?.name}"? This action cannot be undone and all data will be permanently deleted.`}
-                confirmLabel="Remove"
+                isOpen={!!toRemove}
+                onClose={() => setToRemove(null)}
+                onConfirm={() => {
+                    if (toRemove) onRemoveWorkspace(toRemove.id);
+                    setToRemove(null);
+                }}
+                title="Delete workspace"
+                description={`Delete "${toRemove?.name}"? Its containers, files and devnet data are removed permanently.`}
+                confirmLabel="Delete"
                 cancelLabel="Cancel"
                 variant="danger"
             />
