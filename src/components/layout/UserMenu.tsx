@@ -1,9 +1,10 @@
 // src/components/layout/UserMenu.tsx
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Copy, LogOut, Settings } from 'lucide-react';
+import { Check, Copy, Download, LogOut, Settings } from 'lucide-react';
 
 import type { AuthUser } from '../../features/auth/types/auth.types';
+import { promptInstall, useCanInstall } from '../../features/pwa/install-prompt';
 
 export function shortAddress(address: string): string {
     return address.length > 18 ? `${address.slice(0, 8)}…${address.slice(-6)}` : address;
@@ -50,6 +51,7 @@ export function UserMenu({ user, onSignOut }: { user: AuthUser; onSignOut: () =>
     const navigate = useNavigate();
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+    const canInstall = useCanInstall();
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -125,6 +127,20 @@ export function UserMenu({ user, onSignOut }: { user: AuthUser; onSignOut: () =>
                             <Settings className="h-4 w-4 text-gray-500" />
                             Settings
                         </button>
+                        {canInstall && (
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setOpen(false);
+                                    void promptInstall();
+                                }}
+                                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] text-gray-300 hover:bg-[#21262d] hover:text-white"
+                            >
+                                <Download className="h-4 w-4 text-gray-500" />
+                                Install Corven app
+                            </button>
+                        )}
                     </div>
 
                     <div className="border-t border-[#30363d] py-1">

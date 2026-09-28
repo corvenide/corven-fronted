@@ -14,6 +14,9 @@ export default defineConfig({
     use: {
         baseURL: `http://localhost:${PORT}`,
         trace: 'retain-on-failure',
+        // A service worker would sit between the app and the mock API;
+        // e2e/pwa.spec.ts turns it back on to test the installable app.
+        serviceWorkers: 'block',
     },
     projects: [
         {

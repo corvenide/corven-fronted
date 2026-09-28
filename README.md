@@ -19,6 +19,17 @@ This repository contains the web frontend: the landing page, dashboard, workspac
   - AI assistant panel backed by Claude through the backend (the API key never reaches the browser)
 - **Devnets** page with live chain data for each workspace's node, test accounts, and scripts
 
+## Install as a desktop app
+
+Corven can be installed as an app on Windows and macOS. It opens in its own window, with a Start menu or Dock icon, and updates itself whenever a new version is deployed.
+
+- **Chrome or Edge (Windows, macOS):** open https://corvanide.space and choose **Install Corven app** from the account menu, or click the install icon at the right of the address bar.
+- **Safari (macOS Sonoma or later):** **File → Add to Dock**.
+
+Wallet sign-in works the same as in the browser, because the app uses the browser's wallet extensions.
+
+How it works: `vite-plugin-pwa` (configured in `vite.config.ts`) generates the web app manifest and a service worker that caches the app's own files, so it opens instantly. API calls always go to the network. When a new version is deployed, the app shows **"A new version of Corven is available"** and reloads only when the user clicks **Reload**, so no one loses unsaved work. The icons are in `public/icons/`.
+
 ## Tech stack
 
 - React 19, TypeScript, Vite 6
