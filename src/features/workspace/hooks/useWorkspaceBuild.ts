@@ -127,9 +127,11 @@ export function useWorkspaceBuild(workspaceId: string): UseWorkspaceBuildResult 
             if (data?.success) {
                 console.log('[Build] Authentication successful');
                 setIsAuthenticated(true);
-                // Refresh projects after authentication
+                // Refresh projects after authentication. (Don't check the
+                // isAuthenticated state here: this closure only ever sees
+                // its initial value, false.)
                 setTimeout(() => {
-                    if (socket.connected && isAuthenticated) {
+                    if (socket.connected) {
                         socket.emit('projects:list', { workspaceId });
                         setLoadingProjects(true);
                     }

@@ -125,9 +125,11 @@ export function useWorkspaceTests(workspaceId: string): UseWorkspaceTestsResult 
                 setIsAuthenticated(true);
                 // Refresh projects after authentication
                 console.log('[Socket] Scheduling project list request after auth');
+                // (Don't check the isAuthenticated state here: this closure
+                // only ever sees its initial value, false.)
                 setTimeout(() => {
                     console.log('[Socket] Requesting project list after auth delay');
-                    if (socket.connected && isAuthenticated) {
+                    if (socket.connected) {
                         socket.emit('projects:list', { workspaceId });
                         setLoadingProjects(true);
                     }
