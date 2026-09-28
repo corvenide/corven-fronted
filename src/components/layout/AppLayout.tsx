@@ -6,12 +6,67 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, ChevronRight, LayoutGrid, Network, Settings } from 'lucide-react';
+import { BookOpen, ChevronRight, Globe, LayoutGrid, Network, Settings, Wallet } from 'lucide-react';
+import { ccc } from '@ckb-ccc/connector-react';
 
 import { useAuth } from '../../features/auth/hooks/useAuth';
 import { workspaceApi } from '../../features/workspace/api/workspace.api';
 import { workspaceKeys } from '../../features/workspace/queries/workspace.keys';
 import { UserMenu } from './UserMenu';
+
+function NetworkSelector() {
+    const { client, setClient } = ccc.useCcc();
+
+    const clientOptions = [
+        { name: 'CKB Mainnet', client: new ccc.ClientPublicMainnet() },
+        { name: 'CKB Testnet', client: new ccc.ClientPublicTestnet() },
+    ];
+
+    const currentClientName =
+        clientOptions.find((opt) => opt.client.addressPrefix === client?.addressPrefix)?.name ??
+        (client?.addressPrefix === 'ckb' ? 'CKB Mainnet' : 'CKB Testnet');
+
+    return (
+        <div className="relative flex items-center">
+            <label className="sr-only">Switch CKB Network</label>
+            <div className="flex h-8 items-center gap-1.5 rounded-md border border-[#30363d] bg-[#161b22] px-2.5 text-[12px] font-medium text-gray-200 transition-colors hover:border-gray-500">
+                <Globe className="h-3.5 w-3.5 text-[#3cc68a]" />
+                <select
+                    value={currentClientName}
+                    onChange={(e) => {
+                        const selected = clientOptions.find((opt) => opt.name === e.target.value);
+                        if (selected) {
+                            setClient(selected.client);
+                        }
+                    }}
+                    className="cursor-pointer bg-transparent text-gray-200 outline-none"
+                >
+                    {clientOptions.map((opt) => (
+                        <option key={opt.name} value={opt.name} className="bg-[#161b22] text-gray-200">
+                            {opt.name}
+                        </option>
+                    ))}
+                </select>
+            </div>
+        </div>
+    );
+}
+
+function WalletButton() {
+    const { open, wallet } = ccc.useCcc();
+    const signer = ccc.useSigner();
+
+    return (
+        <button
+            type="button"
+            onClick={() => open()}
+            className="flex h-8 items-center gap-1.5 rounded-md border border-[#30363d] bg-[#161b22] px-2.5 text-[12px] font-medium text-gray-200 transition-colors hover:border-gray-500 hover:bg-[#21262d]"
+        >
+            <Wallet className="h-3.5 w-3.5 text-[#3cc68a]" />
+            <span>{wallet ? wallet.name : 'Connect Wallet'}</span>
+        </button>
+    );
+}
 
 const LOGO_URL =
     'https://res.cloudinary.com/dswyz4vpp/image/upload/v1785082590/ChatGPT_Image_Jul_26__2026__01_05_52_PM-removebg-preview_wua44l.png';
@@ -48,9 +103,8 @@ function RailLink({ item }: { item: NavItem }) {
             to={item.to}
             aria-label={item.label}
             aria-current={active ? 'page' : undefined}
-            className={`group relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
-                active ? 'bg-[#21262d] text-white' : 'text-gray-500 hover:bg-[#161b22] hover:text-gray-200'
-            }`}
+            className={`group relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${active ? 'bg-[#21262d] text-white' : 'text-gray-500 hover:bg-[#161b22] hover:text-gray-200'
+                }`}
         >
             {active && <span className="absolute -left-2 top-2 bottom-2 w-0.5 rounded-r bg-[#3cc68a]" />}
             {item.icon}
@@ -76,8 +130,8 @@ function Breadcrumb() {
     const page = location.pathname.startsWith('/nodes')
         ? 'Devnets'
         : location.pathname.startsWith('/settings')
-          ? 'Settings'
-          : 'Workspaces';
+            ? 'Settings'
+            : 'Workspaces';
 
     if (!workspaceId) {
         return <span className="truncate text-[13px] font-medium text-gray-200">{page}</span>;
@@ -135,6 +189,10 @@ export default function AppLayout() {
                     <BookOpen className="h-3.5 w-3.5" />
                     CKB docs
                 </a>
+
+                <NetworkSelector />
+
+                {/* <WalletButton /> */}
 
                 {user && <UserMenu user={user} onSignOut={() => void signOut()} />}
             </header>

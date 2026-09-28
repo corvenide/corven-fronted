@@ -6,7 +6,6 @@ import AppLayout from '../components/layout/AppLayout';
 
 import AuthPage from '../features/auth/pages/AuthPage';
 import HomePage from '../pages/HomePage';
-import DonatePage from '../pages/DonatePage';
 import DashboardPage from '../pages/DashboardPage';
 import IdePage from '../pages/IdePage';
 import NodesPage from '../pages/NodePage';
@@ -62,7 +61,13 @@ export const router = createBrowserRouter([
         element: <HomePage />,
     },
     {
+        // Redirect old /donate route to dashboard (donate tab is now in dashboard)
         path: '/donate',
-        element: <DonatePage />,
+        element: <Navigate to="/dashboard" replace />,
+    },
+    {
+        // Redirect old /community route to dashboard (community tab is now in dashboard)
+        path: '/community',
+        element: <Navigate to="/dashboard" replace />,
     },
 ]);
