@@ -126,16 +126,24 @@ The API gateway must implement these routes and allow the frontend's origin with
 
 ## Deployment
 
+Production is served at `https://corven.space` from the same AWS Lightsail instance as the backend, with Caddy serving the static build. The full guide is in the backend repository: [`docs/DEPLOYMENT.md`](https://github.com/corvenide/corven-backend-v2/blob/main/docs/DEPLOYMENT.md).
+
+To release a new version, run this on the server:
+
 ```bash
-VITE_API_URL=https://api.example.com/api VITE_TERMINAL_URL=https://terminal.example.com pnpm build
-pnpm start
+cd /opt/corven/platform
+bash deploy/deploy.sh
 ```
 
-`VITE_*` variables are baked in at build time, so set them before `pnpm build`, not at start. Before deploying, check that:
+The script builds in a temporary Node container and publishes `dist/` to `/opt/corven/web`. It uses these build-time values, which you can override with environment variables:
 
-- The API gateway and terminal service are reachable from the browser over HTTPS/WSS
-- The backend's CORS settings allow the production origin with credentials
-- The refresh cookie's `SameSite` and `Secure` settings work across your domains
+| Variable | Default |
+|---|---|
+| `VITE_API_URL` | `https://staging-api.corvan.space/api` |
+| `VITE_TERMINAL_URL` | `https://staging-api.corvan.space` |
+| `WEB_ROOT` | `/opt/corven/web` |
+
+`VITE_*` values are baked into the bundle, so changing them requires a rebuild.
 
 ## Notes
 
