@@ -105,6 +105,28 @@ Set `DISABLE_HMR=true` to turn off hot reload and file watching.
 | `pnpm start` | Run the production server (`node dist/server.cjs`) |
 | `pnpm lint` | Type-check with `tsc --noEmit` |
 | `pnpm clean` | Remove `dist/` |
+| `pnpm test` | Unit and component tests (Vitest) |
+| `pnpm test:watch` | Unit tests in watch mode |
+| `pnpm test:e2e` | End-to-end tests in Chromium (Playwright) |
+
+## Testing
+
+**Unit and component tests** (`pnpm test`) sit next to the code as `*.test.ts(x)` and run in jsdom. They cover the API client (including refreshing an expired session and retrying once), session restore and sign-out, in-memory token storage, the file tree, `cargo test` output parsing, relative times, the route guard and the confirm dialog.
+
+**End-to-end tests** (`pnpm test:e2e`, in `e2e/`) build the app, serve the production bundle, and drive it in Chromium. A mock backend (`e2e/support/mock-api.ts`) answers every API call and keeps workspaces in memory, so no backend has to run. They cover:
+
+- signed-out visitors being sent to sign-in, a returning user being signed back in from the refresh cookie, and a revoked session
+- the dashboard: listing workspaces with their status, creating one from a template, starting and stopping, deleting with confirmation, searching, recovering from a failed load, and opening the IDE
+
+Install the browser once before the first run:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+Wallet sign-in itself isn't covered end to end, because it needs a real wallet extension; the backend's end-to-end tests cover it with real signatures.
+
+Both suites run in GitHub Actions on every pull request (`.github/workflows/test.yml`).
 
 ## Backend integration
 
