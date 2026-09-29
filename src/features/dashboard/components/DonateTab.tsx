@@ -1,443 +1,795 @@
 // src/features/dashboard/components/DonateTab.tsx
-//
-// Donate tab embedded in the dashboard. Displays donation metrics,
-// the donation wallet address, recent donations received by the wallet,
-// and the donate-with-wallet panel. All data comes from the real
-// donation module (features/community/donation.ts).
-
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ccc } from '@ckb-ccc/connector-react';
-import {
-    ArrowUpRight,
-    Check,
-    Copy,
-    Cpu,
-    Heart,
-    Loader2,
-    Server,
-    TrendingUp,
-    Wallet,
-    Wrench,
-    Zap,
-    AlertTriangle,
-    DollarSign,
-    Users,
-} from 'lucide-react';
 
-import {
-    DONATION_ADDRESS,
-    DONATION_NETWORK,
-    DonationError,
-    DonorRecord,
-    PRESET_AMOUNTS,
-    explorerAddressUrl,
-    explorerTxUrl,
-    fetchCkbUsdPrice,
-    fetchDonationBalance,
-    fetchDonationHistory,
-    parseCkbAmount,
-    sendDonation,
-} from '../../community/donation';
+// Fallback rate used only until Coinbase responds (or if the request fails).
+const FALLBACK_CKB_RATE = 0.0200;
+const COINBASE_SPOT_URL = 'https://api.coinbase.com/v2/prices/CKB-USD/spot';
 
-type SendState =
-    | { kind: 'idle' }
-    | { kind: 'sending' }
-    | { kind: 'sent'; txHash: string; amount: number }
-    | { kind: 'error'; message: string };
+const DEPOSIT_ADDRESS = 'ckb1qzdcr9un5ezx8tkh03s46m9jymh22jruelq8svzr5krj2nx69dhjvqgjnwwhj6rdh5x73h663l9zdnxpntqzu5enqqj48cah';
 
-function formatCkb(value: number): string {
-    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+// 1 CKB = 10^8 shannons
+const SHANNONS_PER_CKB = 100_000_000n;
+
+interface DonorRow {
+    id: string;
+    handle: string;
+    isVerified?: boolean;
+    initials: string;
+    amountCkb: number;
+    txHash: string;
+    timeAgo: string;
+    message: string;
+    color: string;
 }
 
-function formatUsd(value: number): string {
-    return value.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
-}
-
-function shortAddress(address: string): string {
-    return address.length > 18 ? `${address.slice(0, 8)}…${address.slice(-6)}` : address;
-}
-
-const USES = [
-    {
-        icon: Server,
-        title: 'Workspace servers',
-        body: 'Every workspace runs its own build container and private CKB devnet. Donations keep them running.',
-    },
-    {
-        icon: Wrench,
-        title: 'Open tooling',
-        body: 'Templates, the debugger integration and deploy flows that make CKB development faster for everyone.',
-    },
-    {
-        icon: Cpu,
-        title: 'Faster builds',
-        body: 'Shared build caches and bigger machines, so compiling for CKB-VM takes seconds rather than minutes.',
-    },
-];
+const INITIAL_BACKERS: DonorRow[] = [];
 
 export default function DonateTab() {
-    const { open, client } = ccc.useCcc();
-    const signer = ccc.useSigner();
+    // In this version of @ckb-ccc/connector-react the context exposes:
+    //   { isOpen, open, close, disconnect, setClient, client, wallet?, signerInfo? }
+    // The live signer lives on `signerInfo.signer` — NOT on `wallet`.
+    const { open, wallet, signerInfo, client } = ccc.useCcc();
 
-    const [copied, setCopied] = useState(false);
-    const [balance, setBalance] = useState<number | null>(null);
-    const [ckbUsdPrice, setCkbUsdPrice] = useState<number | null>(null);
-    const [walletAddress, setWalletAddress] = useState<string | null>(null);
-    const [donors, setDonors] = useState<DonorRecord[]>([]);
-    const [loadingDonors, setLoadingDonors] = useState(true);
+    const signer: ccc.Signer | undefined = signerInfo?.signer;
+    const isConnected = !!signer;
+    const walletName = wallet?.name;
 
-    const [preset, setPreset] = useState<number | null>(PRESET_AMOUNTS[1]);
-    const [custom, setCustom] = useState('');
-    const [send, setSend] = useState<SendState>({ kind: 'idle' });
+    // ── Live CKB/USD rate from Coinbase ────────────────────────────────
+    const [ckbRate, setCkbRate] = useState<number>(FALLBACK_CKB_RATE);
+    const [rateStatus, setRateStatus] = useState<'loading' | 'live' | 'fallback'>('loading');
+    const [rateUpdatedAt, setRateUpdatedAt] = useState<Date | null>(null);
 
-    const amount = preset !== null ? preset : parseCkbAmount(custom);
-
-    // Read balance, CKB USD price, and donation history
-    const lastTxHash = send.kind === 'sent' ? send.txHash : null;
-    useEffect(() => {
-        let cancelled = false;
-        const mainnetClient = new ccc.ClientPublicMainnet();
-        void fetchDonationBalance(mainnetClient).then((value) => !cancelled && setBalance(value));
-        void fetchCkbUsdPrice().then((price) => !cancelled && setCkbUsdPrice(price));
-        setLoadingDonors(true);
-        void fetchDonationHistory(mainnetClient).then((records) => {
-            if (!cancelled) {
-                setDonors(records);
-                setLoadingDonors(false);
+    const fetchRate = useCallback(async () => {
+        try {
+            setRateStatus((prev) => (prev === 'live' ? 'live' : 'loading'));
+            const res = await fetch(COINBASE_SPOT_URL, {
+                headers: { Accept: 'application/json' },
+            });
+            if (!res.ok) throw new Error(`Coinbase responded ${res.status}`);
+            const json: { data?: { amount?: string } } = await res.json();
+            const amount = parseFloat(json?.data?.amount ?? '');
+            if (!Number.isFinite(amount) || amount <= 0) {
+                throw new Error('Invalid rate payload');
             }
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [lastTxHash]);
+            setCkbRate(amount);
+            setRateUpdatedAt(new Date());
+            setRateStatus('live');
+        } catch (err) {
+            console.warn('Failed to fetch CKB rate from Coinbase, using fallback.', err);
+            setRateStatus('fallback');
+        }
+    }, []);
 
     useEffect(() => {
-        let cancelled = false;
-        setWalletAddress(null);
-        if (signer) {
-            void signer
-                .getRecommendedAddress()
-                .then((address) => !cancelled && setWalletAddress(address))
-                .catch(() => undefined);
-        }
-        return () => {
-            cancelled = true;
-        };
-    }, [signer]);
+        void fetchRate();
+        // Refresh every 60s while the tab is open
+        const id = setInterval(() => void fetchRate(), 60_000);
+        return () => clearInterval(id);
+    }, [fetchRate]);
 
-    const copy = async () => {
-        try {
-            await navigator.clipboard.writeText(DONATION_ADDRESS);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1800);
-        } catch {
-            /* clipboard blocked */
+    // Keep USD value in sync whenever the rate changes
+    useEffect(() => {
+        setUsdAmount((ckbAmount * ckbRate).toFixed(2));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ckbRate]);
+
+    const [donationMode, setDonationMode] = useState<'onetime' | 'monthly'>('onetime');
+    const [ckbAmount, setCkbAmount] = useState<number>(1000);
+    const [usdAmount, setUsdAmount] = useState<string>((1000 * FALLBACK_CKB_RATE).toFixed(2));
+    const [donorHandle, setDonorHandle] = useState('');
+    const [donorMsg, setDonorMsg] = useState('');
+    const [copied, setCopied] = useState(false);
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [isSending, setIsSending] = useState(false);
+
+    const showToast = (message: string) => {
+        setToastMessage(message);
+        setTimeout(() => setToastMessage(null), 3500);
+    };
+
+    const handleSetAmount = (amount: number) => {
+        setCkbAmount(amount);
+        setUsdAmount((amount * ckbRate).toFixed(2));
+    };
+
+    const handleCkbChange = (val: string) => {
+        const num = parseFloat(val) || 0;
+        setCkbAmount(num);
+        setUsdAmount((num * ckbRate).toFixed(2));
+    };
+
+    const handleUsdChange = (val: string) => {
+        const num = parseFloat(val) || 0;
+        setUsdAmount(val);
+        const ckb = Math.round(num / ckbRate);
+        setCkbAmount(ckb);
+    };
+
+    const copyAddress = () => {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(DEPOSIT_ADDRESS).then(() => {
+                setCopied(true);
+                showToast('Deposit address copied to clipboard');
+                setTimeout(() => setCopied(false), 2000);
+            });
         }
     };
 
-    const donate = async () => {
-        if (!signer || !amount) return;
-        setSend({ kind: 'sending' });
+    const triggerWeb3Donation = async () => {
+        // 1. Wallet must be connected
+        if (!signer) {
+            showToast('Opening wallet connect — please pick a CKB wallet.');
+            open();
+            return;
+        }
+
+        // 2. Re-verify the signer is still connected (it can go stale)
         try {
-            const txHash = await sendDonation(signer, amount);
-            setSend({ kind: 'sent', txHash, amount });
-        } catch (error) {
-            const message =
-                error instanceof DonationError
-                    ? error.message
-                    : /reject|denied|cancel/i.test(String((error as Error)?.message))
-                      ? 'The transaction was cancelled in your wallet.'
-                      : 'The donation couldn\'t be sent. Please try again.';
-            setSend({ kind: 'error', message });
+            if (!(await signer.isConnected())) {
+                showToast('Wallet disconnected. Please reconnect.');
+                open();
+                return;
+            }
+        } catch (err) {
+            console.error('isConnected check failed', err);
+            showToast('Could not verify wallet connection.');
+            return;
+        }
+
+        // 3. Validate amount
+        if (!ckbAmount || ckbAmount < 61) {
+            showToast('Please enter at least 61 CKB (cell base capacity).');
+            return;
+        }
+
+        // 4. Verify the wallet is on CKB Mainnet.
+        try {
+            const addrObj = await signer.getRecommendedAddressObj();
+            const isMainnet = addrObj.prefix === 'ckb';
+
+            if (!isMainnet) {
+                showToast('Please switch your wallet to CKB Mainnet to donate.');
+                return;
+            }
+        } catch (err) {
+            console.error('Network check failed', err);
+            showToast('Could not verify wallet network. Please try again.');
+            return;
+        }
+
+        // 5. Read the connected address
+        let fromAddress: string;
+        try {
+            fromAddress = await signer.getRecommendedAddress();
+        } catch (err) {
+            console.error('Failed to get signer address', err);
+            showToast('Could not read your wallet address.');
+            return;
+        }
+
+        if (!fromAddress) {
+            showToast('Wallet returned an empty address.');
+            return;
+        }
+
+        setIsSending(true);
+        try {
+            // 6. Resolve the deposit lock script on the signer's network.
+            const { script: toLock } = await ccc.Address.fromString(
+                DEPOSIT_ADDRESS,
+                signer.client,
+            );
+
+            // 7. Optional on-chain message.
+            const message = [
+                donorHandle ? `@${donorHandle}` : '',
+                donorMsg,
+            ]
+                .filter(Boolean)
+                .join(' — ');
+            const messageBytes = message
+                ? new TextEncoder().encode(message)
+                : new Uint8Array();
+
+            // 8. Amount in shannons.
+            const amountShannons = BigInt(Math.round(ckbAmount)) * SHANNONS_PER_CKB;
+
+            // 9. Build the transfer tx.
+            const tx = ccc.Transaction.from({
+                outputs: [
+                    {
+                        lock: toLock,
+                        capacity: amountShannons,
+                    },
+                ],
+                outputsData: [messageBytes],
+            });
+
+            // 10. Complete inputs + fee using the signer.
+            await tx.completeInputsByCapacity(signer);
+            await tx.completeFeeBy(signer, 1000);
+
+            // 11. Sign with the connected wallet.
+            const signedTx = await signer.signTransaction(tx);
+
+            // 12. Broadcast via the signer's client.
+            const txHash = await signer.client.sendTransaction(signedTx);
+
+            showToast(
+                `Donation sent! Tx: ${txHash.slice(0, 10)}…${txHash.slice(-6)}`,
+            );
+        } catch (err: any) {
+            console.error('Donation failed', err);
+            const msg =
+                err?.message?.includes('User rejected') ||
+                    err?.message?.includes('rejected')
+                    ? 'Transaction rejected in wallet.'
+                    : err?.message || 'Donation failed. Please try again.';
+            showToast(msg);
+        } finally {
+            setIsSending(false);
         }
     };
 
-    const onMainnet = !client || client.addressPrefix === 'ckb';
+    // Pretty-print the live rate with more precision for small numbers
+    const rateDisplay = ckbRate < 0.01
+        ? ckbRate.toFixed(6)
+        : ckbRate.toFixed(4);
 
     return (
-        <div className="space-y-7">
-            {/* ────────── Metrics overview ────────── */}
-            <div>
-                <h2 className="text-[18px] font-semibold text-white">Donations</h2>
-                <p className="mt-0.5 text-[13px] text-gray-400">
-                    Support Corven development. Every contribution helps keep the platform free and open.
-                </p>
-            </div>
+        <div className="flex flex-col w-full min-h-screen bg-surface font-body-md text-on-surface antialiased">
+            <div className="w-full max-w-[1440px] mx-auto px-space-md lg:px-space-xl py-space-lg flex flex-col gap-space-xl">
+                {/* Hero Header & Value Proposition */}
+                <div className="relative overflow-hidden rounded-xl bg-surface-container-low p-space-lg lg:p-space-xl border border-outline-variant/30">
+                    <div className="absolute -right-20 -top-24 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute right-1/3 -bottom-24 w-64 h-64 bg-secondary/10 rounded-full blur-2xl pointer-events-none"></div>
 
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <div className="rounded-lg border border-[#30363d] bg-[#161b22] px-4 py-3.5">
-                    <div className="text-[12px] text-gray-400">Total raised</div>
-                    <div className="mt-1 font-mono text-[22px] font-semibold tabular-nums text-[#3cc68a]">
-                        {balance !== null ? formatCkb(balance) : '—'} <span className="text-[13px] text-gray-400 font-sans font-normal">CKB</span>
-                    </div>
-                    <div className="mt-0.5 font-mono text-[12px] text-emerald-400/80">
-                        {balance !== null && ckbUsdPrice !== null ? `≈ ${formatUsd(balance * ckbUsdPrice)} USD` : '—'}
-                    </div>
-                </div>
-                <div className="rounded-lg border border-[#30363d] bg-[#161b22] px-4 py-3.5">
-                    <div className="text-[12px] text-gray-400">Network</div>
-                    <div className="mt-1 flex items-center gap-2 text-[16px] font-semibold text-amber-300">
-                        <span className="h-2 w-2 rounded-full bg-amber-300" />
-                        {DONATION_NETWORK}
-                    </div>
-                </div>
-                <div className="rounded-lg border border-[#30363d] bg-[#161b22] px-4 py-3.5">
-                    <div className="text-[12px] text-gray-400">Wallet status</div>
-                    <div className="mt-1 flex items-center gap-2 text-[16px] font-semibold text-emerald-300">
-                        <span className={`h-2 w-2 rounded-full ${signer ? 'bg-emerald-400' : 'bg-gray-500'}`} />
-                        {signer ? 'Connected' : 'Not connected'}
-                    </div>
-                </div>
-                <div className="rounded-lg border border-[#30363d] bg-[#161b22] px-4 py-3.5">
-                    <div className="text-[12px] text-gray-400">Donation impact</div>
-                    <div className="mt-1 flex items-center gap-1.5 text-[16px] font-semibold text-[#79b8ff]">
-                        <TrendingUp className="h-4 w-4" />
-                        Building CKB
-                    </div>
-                </div>
-            </div>
+                    <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-space-lg">
+                        <div className="max-w-3xl flex flex-col gap-space-sm">
+                            <div className="inline-flex items-center gap-2 self-start px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                                <span className="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+                                <span className="font-label-sm text-label-sm uppercase tracking-wider font-semibold">
+                                    Public Goods Infrastructure
+                                </span>
+                                <span className="text-outline-variant">•</span>
+                                <span className="font-code-sm text-code-sm text-on-surface-variant">RISC-V VM Tooling</span>
+                            </div>
+                            <h1 className="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight">
+                                Support Corven IDE Development
+                            </h1>
+                            <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl leading-relaxed">
+                                Corven is 100% open-source tooling built for the Nervos CKB developer ecosystem. Every contribution directly funds devnet nodes, cloud runner containers, and contract debugger maintenance.
+                            </p>
+                        </div>
 
-            {/* ────────── Donation panels ────────── */}
-            <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
-                {/* Wallet address + balance */}
-                <section aria-labelledby="donation-address" className="rounded-xl border border-[#30363d] bg-[#161b22] p-6">
-                    <div className="flex items-center justify-between gap-3">
-                        <h3 id="donation-address" className="text-[15px] font-semibold text-white">Donation address</h3>
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-mono text-amber-300">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
-                            {DONATION_NETWORK}
-                        </span>
-                    </div>
-
-                    <div className="mt-5">
-                        <p className="break-all rounded-lg border border-[#21262d] bg-[#0d1117] p-3 font-mono text-[12px] leading-[1.65] text-gray-200" data-testid="donation-address">
-                            {DONATION_ADDRESS}
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                                type="button"
-                                onClick={() => void copy()}
-                                className="inline-flex h-9 items-center gap-2 rounded-md border border-[#30363d] bg-[#21262d] px-3 text-[13px] font-medium text-gray-200 transition-colors hover:border-gray-500"
-                            >
-                                {copied ? <Check className="h-4 w-4 text-[#3cc68a]" /> : <Copy className="h-4 w-4 text-gray-400" />}
-                                {copied ? 'Copied' : 'Copy address'}
-                            </button>
+                        <div className="flex items-center gap-space-md flex-shrink-0">
+                            <div className="px-space-md py-space-sm bg-surface-container rounded-lg shadow-sm flex items-center gap-space-sm border border-outline-variant/30">
+                                <span className="material-symbols-outlined text-secondary text-[22px]">currency_exchange</span>
+                                <div className="flex flex-col">
+                                    <span className="font-label-sm text-label-sm text-on-surface-variant uppercase flex items-center gap-1.5">
+                                        Live Oracle Rate
+                                        <span
+                                            className={`inline-block w-1.5 h-1.5 rounded-full ${rateStatus === 'live'
+                                                ? 'bg-primary animate-pulse'
+                                                : rateStatus === 'loading'
+                                                    ? 'bg-secondary animate-pulse'
+                                                    : 'bg-outline-variant'
+                                                }`}
+                                            title={
+                                                rateStatus === 'live'
+                                                    ? 'Live from Coinbase'
+                                                    : rateStatus === 'loading'
+                                                        ? 'Fetching…'
+                                                        : 'Fallback rate'
+                                            }
+                                        />
+                                    </span>
+                                    <span className="font-code-md text-code-md text-on-surface font-medium">
+                                        1 CKB = ${rateDisplay} USD
+                                    </span>
+                                    <span className="font-code-sm text-code-sm text-on-surface-variant">
+                                        {rateStatus === 'live'
+                                            ? 'Source: Coinbase Spot'
+                                            : rateStatus === 'loading'
+                                                ? 'Fetching Coinbase…'
+                                                : 'Fallback rate (Coinbase unreachable)'}
+                                        {rateUpdatedAt && rateStatus === 'live' && (
+                                            <> · {rateUpdatedAt.toLocaleTimeString()}</>
+                                        )}
+                                    </span>
+                                </div>
+                            </div>
                             <a
-                                href={explorerAddressUrl()}
-                                target="_blank"
-                                rel="noreferrer noopener"
-                                className="inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[13px] text-gray-400 transition-colors hover:text-gray-200"
+                                className="px-space-md py-space-sm bg-surface-container hover:bg-surface-bright rounded-lg text-on-surface font-body-sm text-body-sm transition-colors flex items-center gap-1.5 shadow-sm border border-outline-variant/30"
+                                href="#backer-history"
                             >
-                                View on explorer
-                                <ArrowUpRight className="h-3.5 w-3.5" />
+                                <span className="material-symbols-outlined text-[18px]">receipt_long</span>
+                                <span>View Ledger</span>
                             </a>
                         </div>
-                        <p className="mt-4 text-[12.5px] leading-relaxed text-gray-500">
-                            Send CKB from any wallet or exchange that supports {DONATION_NETWORK}. Always verify the address before sending.
-                        </p>
+                    </div>
+                </div>
+
+                {/* Live Metric Stat Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-md">
+                    {/* Stat 1 */}
+                    <div className="p-space-lg rounded-xl bg-surface-container-low flex flex-col justify-between shadow-sm relative overflow-hidden group border border-outline-variant/30">
+                        <div className="flex items-center justify-between mb-space-sm">
+                            <span className="font-label-md text-label-md text-on-surface-variant">Total Donated</span>
+                            <div className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-primary">
+                                <span className="material-symbols-outlined text-[18px]">savings</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col">
+                            <div className="flex items-baseline gap-2">
+                                <span className="font-headline-lg text-headline-lg font-semibold text-on-surface font-code-lg">0</span>
+                                <span className="font-label-md text-label-md text-primary font-code-sm">CKB</span>
+                            </div>
+                            <span className="font-code-sm text-code-sm text-on-surface-variant mt-0.5">≈ $0.00 USD</span>
+                        </div>
+                        <div className="w-full bg-surface-container h-1 rounded-full mt-space-md overflow-hidden">
+                            <div className="bg-primary h-full rounded-full" style={{ width: '0%' }}></div>
+                        </div>
                     </div>
 
-                    {balance !== null && (
-                        <div className="mt-6 flex flex-col gap-1 border-t border-[#21262d] pt-5">
-                            <div className="flex items-baseline justify-between">
-                                <span className="text-[13px] text-gray-400">Raised so far</span>
-                                <span className="font-mono text-[20px] font-semibold text-white">
-                                    {formatCkb(balance)} <span className="text-[13px] text-gray-400">CKB</span>
+                    {/* Stat 2 */}
+                    <div className="p-space-lg rounded-xl bg-surface-container-low flex flex-col justify-between shadow-sm group border border-outline-variant/30">
+                        <div className="flex items-center justify-between mb-space-sm">
+                            <span className="font-label-md text-label-md text-on-surface-variant">Active Donors</span>
+                            <div className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-secondary">
+                                <span className="material-symbols-outlined text-[18px]">group</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col">
+                            <div className="flex items-baseline gap-2">
+                                <span className="font-headline-lg text-headline-lg font-semibold text-on-surface font-code-lg">0</span>
+                                <span className="font-label-md text-label-md text-secondary font-code-sm">Supporters</span>
+                            </div>
+                            <span className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Developers & Protocol Teams</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-space-md font-code-sm text-code-sm text-primary">
+                            <span className="material-symbols-outlined text-[14px]">trending_up</span>
+                            <span>No donations yet</span>
+                        </div>
+                    </div>
+
+                    {/* Stat 3 */}
+                    <div className="p-space-lg rounded-xl bg-surface-container-low flex flex-col justify-between shadow-sm group border border-outline-variant/30">
+                        <div className="flex items-center justify-between mb-space-sm">
+                            <span className="font-label-md text-label-md text-on-surface-variant">Monthly Hosting Goal</span>
+                            <div className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-surface-tint">
+                                <span className="material-symbols-outlined text-[18px]">cloud_sync</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col">
+                            <div className="flex items-baseline gap-2">
+                                <span className="font-headline-lg text-headline-lg font-semibold text-on-surface font-code-lg">0%</span>
+                                <span className="font-body-sm text-body-sm text-on-surface-variant">funded</span>
+                            </div>
+                            <span className="font-code-sm text-code-sm text-on-surface-variant mt-0.5">0 / 150,000 CKB Target</span>
+                        </div>
+                        <div className="w-full bg-surface-container h-1 rounded-full mt-space-md overflow-hidden">
+                            <div className="bg-surface-tint h-full rounded-full" style={{ width: '0%' }}></div>
+                        </div>
+                    </div>
+
+                    {/* Stat 4 */}
+                    <div className="p-space-lg rounded-xl bg-surface-container-low flex flex-col justify-between shadow-sm group border border-outline-variant/30">
+                        <div className="flex items-center justify-between mb-space-sm">
+                            <span className="font-label-md text-label-md text-on-surface-variant">Average Contribution</span>
+                            <div className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-tertiary">
+                                <span className="material-symbols-outlined text-[18px]">data_thresholding</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col">
+                            <div className="flex items-baseline gap-2">
+                                <span className="font-headline-lg text-headline-lg font-semibold text-on-surface font-code-lg">0</span>
+                                <span className="font-label-md text-label-md text-tertiary font-code-sm">CKB</span>
+                            </div>
+                            <span className="font-code-sm text-code-sm text-on-surface-variant mt-0.5">≈ $0.00 USD median</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-space-md font-code-sm text-code-sm text-on-surface-variant">
+                            <span className="material-symbols-outlined text-[14px]">lock</span>
+                            <span>Zero Platform Commission</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Main Section: Donation Engine + Sidebars */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
+                    {/* Interactive Donation Core (8 cols) */}
+                    <div className="lg:col-span-8 flex flex-col gap-space-lg">
+                        {/* Interactive Widget Card */}
+                        <div className="bg-surface-container-low rounded-xl p-space-lg lg:p-space-xl shadow-md flex flex-col gap-space-lg border border-outline-variant/30">
+                            {/* Tab Navigation (One-time vs Monthly) */}
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-md">
+                                <div className="inline-flex p-1 bg-surface-container rounded-lg border border-outline-variant/20">
+                                    <button
+                                        onClick={() => setDonationMode('onetime')}
+                                        className={`px-space-md py-1.5 rounded-lg font-body-sm text-body-sm font-medium transition-all flex items-center gap-1.5 ${donationMode === 'onetime'
+                                            ? 'bg-surface-bright text-on-surface shadow-sm'
+                                            : 'text-on-surface-variant hover:text-on-surface'
+                                            }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">bolt</span>
+                                        <span>One-time Donation</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setDonationMode('monthly')}
+                                        className={`px-space-md py-1.5 rounded-lg font-body-sm text-body-sm transition-all flex items-center gap-1.5 ${donationMode === 'monthly'
+                                            ? 'bg-surface-bright text-on-surface shadow-sm font-medium'
+                                            : 'text-on-surface-variant hover:text-on-surface'
+                                            }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">all_inclusive</span>
+                                        <span>Monthly Builder Sponsorship</span>
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-code-sm bg-primary/20 text-primary">
+                                            NFT Perk
+                                        </span>
+                                    </button>
+                                </div>
+                                <span className="font-code-sm text-code-sm text-on-surface-variant flex items-center gap-1">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-primary animate-pulse' : 'bg-outline-variant'}`}></span>
+                                    {isConnected ? `Connected${walletName ? ` · ${walletName}` : ''}` : 'No Wallet Connected'}
                                 </span>
                             </div>
-                            {ckbUsdPrice !== null && (
-                                <div className="text-right font-mono text-[13px] text-[#3cc68a]">
-                                    ≈ {formatUsd(balance * ckbUsdPrice)} USD
+
+                            {/* Quick Preset Pills */}
+                            <div className="flex flex-col gap-space-xs">
+                                <label className="font-label-md text-label-md text-on-surface-variant">Select Amount (CKB)</label>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-space-sm">
+                                    {[250, 1000, 5000, 25000].map((amt) => {
+                                        const isSelected = ckbAmount === amt;
+                                        const usd = (amt * ckbRate).toFixed(2);
+                                        return (
+                                            <button
+                                                key={amt}
+                                                type="button"
+                                                onClick={() => handleSetAmount(amt)}
+                                                className={`px-space-md py-3 rounded-lg text-left flex flex-col transition-all border ${isSelected
+                                                    ? 'bg-primary/10 border-primary/40 text-primary'
+                                                    : 'bg-surface-container hover:bg-surface-bright border-transparent text-on-surface'
+                                                    }`}
+                                            >
+                                                <span
+                                                    className={`font-headline-sm text-headline-sm font-semibold font-code-md ${isSelected ? 'text-primary' : 'text-on-surface'
+                                                        }`}
+                                                >
+                                                    {amt.toLocaleString()} CKB
+                                                </span>
+                                                <span
+                                                    className={`font-code-sm text-code-sm ${isSelected ? 'text-primary/80' : 'text-on-surface-variant'
+                                                        }`}
+                                                >
+                                                    ≈ ${usd} USD
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
-                            )}
-                        </div>
-                    )}
-                </section>
-
-                {/* Donate with wallet */}
-                <section aria-labelledby="donate-wallet" className="flex flex-col rounded-xl border border-[#30363d] bg-[#161b22] p-6">
-                    <h3 id="donate-wallet" className="text-[15px] font-semibold text-white">Donate with your wallet</h3>
-                    <p className="mt-1 text-[13px] text-gray-400">Choose an amount, then approve the transfer in your wallet.</p>
-
-                    <div role="radiogroup" aria-label="Amount" className="mt-5 grid grid-cols-4 gap-2">
-                        {PRESET_AMOUNTS.map((value) => (
-                            <button
-                                key={value}
-                                type="button"
-                                role="radio"
-                                aria-checked={preset === value}
-                                onClick={() => {
-                                    setPreset(value);
-                                    setCustom('');
-                                }}
-                                className={`h-11 rounded-lg border font-mono text-[13.5px] font-medium transition-colors ${
-                                    preset === value
-                                        ? 'border-[#3cc68a] bg-[#3cc68a]/10 text-[#3cc68a]'
-                                        : 'border-[#30363d] bg-[#21262d] text-gray-200 hover:border-gray-500'
-                                }`}
-                            >
-                                {value.toLocaleString()}
-                            </button>
-                        ))}
-                    </div>
-
-                    <label className="mt-3 flex h-11 items-center rounded-lg border border-[#30363d] bg-[#0d1117] px-3 focus-within:border-[#3cc68a]">
-                        <span className="sr-only">Other amount in CKB</span>
-                        <input
-                            inputMode="decimal"
-                            placeholder="Other amount"
-                            value={custom}
-                            onChange={(event) => {
-                                setCustom(event.target.value);
-                                setPreset(null);
-                            }}
-                            className="min-w-0 flex-1 bg-transparent font-mono text-[14px] text-gray-200 outline-none placeholder:text-gray-500"
-                        />
-                        <span className="font-mono text-[12px] text-gray-400">CKB</span>
-                    </label>
-
-                    {amount !== null && amount > 0 && ckbUsdPrice !== null && (
-                        <p className="mt-2 text-[12.5px] font-mono text-emerald-400/90">
-                            ≈ {formatUsd(amount * ckbUsdPrice)} USD
-                        </p>
-                    )}
-
-                    {preset === null && custom && !amount && (
-                        <p className="mt-1.5 text-[12px] text-rose-300">Enter an amount in CKB, like 250 or 12.5.</p>
-                    )}
-
-                    <div className="mt-auto pt-6">
-                        {!signer ? (
-                            <button
-                                type="button"
-                                onClick={() => open()}
-                                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#238636] text-[15px] font-medium text-white transition-colors hover:bg-[#2ea043]"
-                            >
-                                <Wallet className="h-4 w-4" />
-                                Connect wallet
-                            </button>
-                        ) : (
-                            <>
-                                {walletAddress && (
-                                    <p className="mb-3 flex items-center justify-between text-[12.5px] text-gray-400">
-                                        <span>From</span>
-                                        <span className="font-mono text-gray-200">{shortAddress(walletAddress)}</span>
-                                    </p>
-                                )}
-                                {!onMainnet && (
-                                    <p className="mb-3 flex items-start gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-[12.5px] text-amber-200">
-                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                                        Your wallet is on testnet. Switch it to {DONATION_NETWORK} to donate to this address.
-                                    </p>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => void donate()}
-                                    disabled={!amount || send.kind === 'sending'}
-                                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#238636] text-[15px] font-medium text-white transition-colors hover:bg-[#2ea043] disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {send.kind === 'sending' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Heart className="h-4 w-4" />}
-                                    {send.kind === 'sending'
-                                        ? 'Waiting for your wallet…'
-                                        : amount
-                                          ? `Donate ${formatCkb(amount)} CKB`
-                                          : 'Donate'}
-                                </button>
-                            </>
-                        )}
-
-                        {send.kind === 'sent' && (
-                            <div role="status" className="mt-3 rounded-lg border border-[#3cc68a]/30 bg-[#3cc68a]/10 p-3 text-[13px]">
-                                <p className="font-medium text-[#3cc68a]">Thank you! {formatCkb(send.amount)} CKB sent.</p>
-                                <a
-                                    href={explorerTxUrl(send.txHash)}
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                    className="mt-1 inline-flex items-center gap-1 font-mono text-[12px] text-gray-400 hover:text-gray-200"
-                                >
-                                    {send.txHash.slice(0, 10)}…{send.txHash.slice(-8)}
-                                    <ArrowUpRight className="h-3 w-3" />
-                                </a>
                             </div>
-                        )}
-                        {send.kind === 'error' && (
-                            <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-rose-400/30 bg-rose-400/10 p-3 text-[13px] text-rose-200">
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                                {send.message}
-                            </p>
-                        )}
+
+                            {/* Dual Currency Calculator */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md bg-surface-container p-space-md rounded-xl border border-outline-variant/30">
+                                <div className="flex flex-col gap-space-xs">
+                                    <label className="font-label-md text-label-md text-on-surface-variant flex items-center justify-between" htmlFor="ckb-input">
+                                        <span>Custom CKB Amount</span>
+                                        <span className="font-code-sm text-code-sm text-primary">Min: 61 CKB (Cell Base)</span>
+                                    </label>
+                                    <div className="relative flex items-center">
+                                        <input
+                                            id="ckb-input"
+                                            type="number"
+                                            value={ckbAmount || ''}
+                                            onChange={(e) => handleCkbChange(e.target.value)}
+                                            min={61}
+                                            step={10}
+                                            className="w-full bg-surface-container-low px-space-md py-2.5 rounded-lg text-on-surface font-code-md text-code-md border border-outline-variant/20 focus:outline-none focus:bg-surface-container-lowest focus:border-primary transition-colors pr-14"
+                                        />
+                                        <span className="absolute right-3 font-code-sm text-code-sm text-primary font-medium pointer-events-none">
+                                            CKB
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-space-xs">
+                                    <label className="font-label-md text-label-md text-on-surface-variant flex items-center justify-between" htmlFor="usd-input">
+                                        <span>Equivalent USD Value</span>
+                                        <span className="font-code-sm text-code-sm text-on-surface-variant">
+                                            @ ${rateDisplay}
+                                        </span>
+                                    </label>
+                                    <div className="relative flex items-center">
+                                        <input
+                                            id="usd-input"
+                                            type="number"
+                                            value={usdAmount}
+                                            onChange={(e) => handleUsdChange(e.target.value)}
+                                            min={1.22}
+                                            step={1}
+                                            className="w-full bg-surface-container-low px-space-md py-2.5 rounded-lg text-on-surface font-code-md text-code-md border border-outline-variant/20 focus:outline-none focus:bg-surface-container-lowest focus:border-secondary transition-colors pr-14"
+                                        />
+                                        <span className="absolute right-3 font-code-sm text-code-sm text-on-surface-variant font-medium pointer-events-none">
+                                            USD
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Donor Public Note / Handle */}
+                            <div className="flex flex-col gap-space-xs">
+                                <label className="font-label-md text-label-md text-on-surface-variant flex items-center justify-between" htmlFor="donor-handle">
+                                    <span>Public Attribution & Message (Optional)</span>
+                                    <span className="font-code-sm text-code-sm text-on-surface-variant">Displayed on-chain & IDE splash</span>
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-sm">
+                                    <input
+                                        id="donor-handle"
+                                        value={donorHandle}
+                                        onChange={(e) => setDonorHandle(e.target.value)}
+                                        placeholder="Handle or .bit alias"
+                                        type="text"
+                                        className="w-full bg-surface-container px-space-md py-2.5 rounded-lg text-on-surface font-code-md text-code-md border border-outline-variant/20 focus:outline-none focus:bg-surface-bright transition-colors"
+                                    />
+                                    <input
+                                        id="donor-msg"
+                                        value={donorMsg}
+                                        onChange={(e) => setDonorMsg(e.target.value)}
+                                        placeholder="e.g. Keep up the RISC-V debugger!"
+                                        type="text"
+                                        className="sm:col-span-2 w-full bg-surface-container px-space-md py-2.5 rounded-lg text-on-surface font-body-sm text-body-sm border border-outline-variant/20 focus:outline-none focus:bg-surface-bright transition-colors"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Web3 Wallet Quick CTA */}
+                            <div className="flex flex-col sm:flex-row items-center gap-space-md pt-space-xs">
+                                <button
+                                    onClick={triggerWeb3Donation}
+                                    disabled={isSending}
+                                    type="button"
+                                    className="w-full sm:flex-1 py-3 px-space-lg rounded-lg bg-primary hover:bg-surface-tint text-on-primary font-headline-sm text-headline-sm font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:scale-[1.008] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">
+                                        {isSending ? 'hourglass_top' : 'account_balance_wallet'}
+                                    </span>
+                                    <span>
+                                        {isSending
+                                            ? 'Awaiting signature…'
+                                            : isConnected
+                                                ? donationMode === 'monthly'
+                                                    ? `Sponsor ${ckbAmount.toLocaleString()} CKB / Month`
+                                                    : `Donate ${ckbAmount.toLocaleString()} CKB`
+                                                : 'Connect Wallet to Donate'}
+                                    </span>
+                                </button>
+                                <div className="flex items-center gap-2 text-on-surface-variant font-code-sm text-code-sm">
+                                    <span className="material-symbols-outlined text-primary text-[18px]">verified_user</span>
+                                    <span>Hardware & Passkey Native</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Direct CKB Deposit Address card & QR Code */}
+                        <div className="bg-surface-container-low rounded-xl p-space-lg lg:p-space-xl shadow-md flex flex-col md:flex-row gap-space-lg items-center border border-outline-variant/30">
+                            {/* High-Contrast SVG QR Code */}
+                            <div className="p-3 bg-surface-container rounded-xl flex-shrink-0 flex flex-col items-center justify-center border border-outline-variant/20">
+                                <svg className="w-36 h-36" fill="none" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
+                                    <rect fill="#0a0e13" height="140" rx="8" width="140"></rect>
+                                    <rect fill="#4edea3" height="32" rx="4" width="32" x="12" y="12"></rect>
+                                    <rect fill="#0a0e13" height="20" rx="2" width="20" x="18" y="18"></rect>
+                                    <rect fill="#4edea3" height="10" rx="1" width="10" x="23" y="23"></rect>
+                                    <rect fill="#4edea3" height="32" rx="4" width="32" x="96" y="12"></rect>
+                                    <rect fill="#0a0e13" height="20" rx="2" width="20" x="102" y="18"></rect>
+                                    <rect fill="#4edea3" height="10" rx="1" width="10" x="107" y="23"></rect>
+                                    <rect fill="#4edea3" height="32" rx="4" width="32" x="12" y="96"></rect>
+                                    <rect fill="#0a0e13" height="20" rx="2" width="20" x="18" y="102"></rect>
+                                    <rect fill="#4edea3" height="10" rx="1" width="10" x="23" y="107"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="8" x="52" y="14"></rect>
+                                    <rect fill="#4cd7f6" height="14" rx="1" width="8" x="68" y="14"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="8" x="80" y="22"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="12" x="52" y="30"></rect>
+                                    <rect fill="#4cd7f6" height="12" rx="1" width="8" x="14" y="52"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="14" x="30" y="56"></rect>
+                                    <rect fill="#4edea3" height="8" rx="1" width="8" x="52" y="52"></rect>
+                                    <rect fill="#4edea3" height="14" rx="1" width="14" x="66" y="52"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="8" x="88" y="52"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="14" x="104" y="56"></rect>
+                                    <rect fill="#4cd7f6" height="14" rx="1" width="6" x="124" y="52"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="16" x="52" y="74"></rect>
+                                    <rect fill="#4edea3" height="14" rx="1" width="8" x="76" y="74"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="8" x="92" y="70"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="18" x="110" y="74"></rect>
+                                    <rect fill="#4edea3" height="14" rx="1" width="8" x="52" y="96"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="14" x="68" y="96"></rect>
+                                    <rect fill="#4cd7f6" height="12" rx="1" width="8" x="90" y="96"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="8" x="106" y="96"></rect>
+                                    <rect fill="#e0e2ea" height="14" rx="1" width="8" x="122" y="96"></rect>
+                                    <rect fill="#e0e2ea" height="8" rx="1" width="14" x="60" y="118"></rect>
+                                    <rect fill="#4edea3" height="8" rx="1" width="10" x="82" y="118"></rect>
+                                    <rect fill="#4edea3" height="12" rx="1" width="12" x="100" y="114"></rect>
+                                </svg>
+                                <span className="font-code-sm text-code-sm text-on-surface-variant mt-2">CKB Native Address</span>
+                            </div>
+
+                            {/* Address Info & Direct Transfer Details */}
+                            <div className="flex-1 flex flex-col gap-space-sm min-w-0">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-label-md text-label-md font-semibold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+                                        <span className="material-symbols-outlined text-[16px] text-primary">qr_code_scanner</span>
+                                        Direct CKB Deposit Address
+                                    </span>
+                                    <span className="font-code-sm text-code-sm text-primary px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
+                                        Mainnet Secp256k1
+                                    </span>
+                                </div>
+                                <p className="font-body-sm text-body-sm text-on-surface-variant">
+                                    Transfer funds directly from Neuron, JoyID, Portal Wallet, or any CKB CLI signer. Transactions are verified and posted to the community board within two block cycles.
+                                </p>
+                                <div className="bg-surface-container rounded-lg p-space-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-space-sm border border-outline-variant/30">
+                                    <code className="font-code-sm text-code-sm text-on-surface truncate select-all px-1">
+                                        {DEPOSIT_ADDRESS}
+                                    </code>
+                                    <button
+                                        onClick={copyAddress}
+                                        className="flex-shrink-0 px-space-md py-1.5 bg-surface-bright hover:bg-surface-container-highest text-on-surface rounded font-code-sm text-code-sm flex items-center justify-center gap-1.5 transition-colors border border-outline-variant/30"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                                        <span>{copied ? 'Copied!' : 'Copy Address'}</span>
+                                    </button>
+                                </div>
+                                <div className="flex items-center gap-space-md pt-1">
+                                    <span className="font-code-sm text-code-sm text-on-surface-variant flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[14px] text-secondary">memory</span>
+                                        Cell Capacity: Auto-reclaimed
+                                    </span>
+                                    <span className="font-code-sm text-code-sm text-on-surface-variant flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[14px] text-primary">speed</span>
+                                        Instant Mempool Indexing
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </section>
+
+                    {/* What Your Donation Funds Sidebar (4 cols) */}
+                    <div className="lg:col-span-4 flex flex-col gap-space-md">
+
+                        {/* Ecosystem Allocation Breakdown */}
+                        <div className="bg-surface-container-low rounded-xl p-space-md shadow-sm flex flex-col gap-space-sm border border-outline-variant/30">
+                            <span className="font-label-md text-label-md font-semibold text-on-surface flex items-center gap-2">
+                                <span className="material-symbols-outlined text-[18px] text-secondary">pie_chart</span>
+                                Monthly Expense Transparency
+                            </span>
+                            <div className="flex flex-col gap-2 font-code-sm text-code-sm">
+                                <div className="flex items-center justify-between text-on-surface-variant">
+                                    <span>Cloud Hosting payaments</span>
+                                </div>
+                                <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+                                    <div className="bg-primary h-full rounded-full" style={{ width: '0%' }}></div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-on-surface-variant pt-1">
+                                    <span>New features implementation</span>
+                                </div>
+                                <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+                                    <div className="bg-secondary h-full rounded-full" style={{ width: '0%' }}></div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-on-surface-variant pt-1">
+                                    <span>Community Onboarding and Events</span>
+                                </div>
+                                <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+                                    <div className="bg-tertiary h-full rounded-full" style={{ width: '0%' }}></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Recent Backers & Transparency On-chain Table */}
+                <div className="bg-surface-container-low rounded-xl shadow-md p-space-lg flex flex-col gap-space-md border border-outline-variant/30" id="backer-history">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-sm">
+                        <div className="flex flex-col">
+                            <h2 className="font-headline-md text-headline-md font-semibold text-on-surface flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary text-[20px]">history_edu</span>
+                                Recent Backers & On-chain Transparency
+                            </h2>
+                            <p className="font-body-sm text-body-sm text-on-surface-variant">
+                                Live verifiable stream of Nervos CKB cells directed to the Corven open-source treasury lock script.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 rounded bg-surface-container font-code-sm text-code-sm text-primary flex items-center gap-1.5 border border-outline-variant/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                Block #—
+                            </span>
+                            <button
+                                onClick={() => showToast('Syncing latest blocks from Nervos Devnet RPC...')}
+                                className="p-1.5 rounded bg-surface-container hover:bg-surface-bright text-on-surface-variant hover:text-on-surface transition-colors border border-outline-variant/20"
+                                title="Refresh Ledger"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">refresh</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Table Container */}
+                    <div className="w-full overflow-x-auto">
+                        <table className="w-full text-left font-body-sm text-body-sm">
+                            <thead>
+                                <tr className="text-on-surface-variant font-label-md text-label-md uppercase tracking-wider bg-surface-container/60">
+                                    <th className="py-3 px-space-md rounded-l-lg">Donor / Handle</th>
+                                    <th className="py-3 px-space-md">Amount (CKB)</th>
+                                    <th className="py-3 px-space-md">USD Value</th>
+                                    <th className="py-3 px-space-md">Tx Hash</th>
+                                    <th className="py-3 px-space-md">Time</th>
+                                    <th className="py-3 px-space-md rounded-r-lg">Message</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-on-surface divide-y-0">
+                                {INITIAL_BACKERS.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="py-8 text-center text-on-surface-variant font-body-sm">
+                                            No recorded donations yet. Be the first backer to support Corven IDE!
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    INITIAL_BACKERS.map((row) => (
+                                        <tr key={row.id} className="hover:bg-surface-container/40 transition-colors">
+                                            <td className="py-3 px-space-md flex items-center gap-2 font-code-md text-code-md">
+                                                <div className={`w-6 h-6 rounded flex items-center justify-center font-bold text-[10px] ${row.color}`}>
+                                                    {row.initials}
+                                                </div>
+                                                <span className={`font-medium ${row.isVerified ? 'text-primary' : ''}`}>
+                                                    {row.handle}
+                                                </span>
+                                                {row.isVerified && (
+                                                    <span className="material-symbols-outlined text-secondary text-[14px]" title="Ecosystem Partner">
+                                                        verified
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="py-3 px-space-md font-code-md text-code-md font-semibold text-on-surface">
+                                                {row.amountCkb.toLocaleString()} CKB
+                                            </td>
+                                            <td className="py-3 px-space-md font-code-sm text-code-sm text-on-surface-variant">
+                                                ${(row.amountCkb * ckbRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="py-3 px-space-md font-code-sm text-code-sm">
+                                                <a
+                                                    className="text-secondary hover:underline inline-flex items-center gap-1"
+                                                    href={`https://pudge.explorer.nervos.org/transaction/${row.txHash}`}
+                                                    target="_blank"
+                                                    rel="noreferrer noopener"
+                                                >
+                                                    <span>{`${row.txHash.slice(0, 6)}...${row.txHash.slice(-4)}`}</span>
+                                                    <span className="material-symbols-outlined text-[12px]">open_in_new</span>
+                                                </a>
+                                            </td>
+                                            <td className="py-3 px-space-md font-code-sm text-code-sm text-on-surface-variant">
+                                                {row.timeAgo}
+                                            </td>
+                                            <td className="py-3 px-space-md text-on-surface-variant truncate max-w-xs">
+                                                {row.message}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
-            {/* ────────── Recent Donors Section ────────── */}
-            <section aria-labelledby="recent-donors" className="rounded-xl border border-[#30363d] bg-[#161b22] p-6">
-                <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-[#3cc68a]" />
-                        <h3 id="recent-donors" className="text-[15px] font-semibold text-white">Recent Donors</h3>
-                    </div>
-                    <span className="text-[12px] text-gray-400">On-chain contributions</span>
+            {/* Toast Notification Container */}
+            {toastMessage && (
+                <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-space-md py-3 rounded-lg bg-surface-container-highest text-on-surface shadow-xl border border-outline-variant/40 animate-fade-in">
+                    <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+                    <span className="font-body-sm text-body-sm font-medium">{toastMessage}</span>
                 </div>
-
-                <div className="mt-4 overflow-hidden rounded-lg border border-[#21262d]">
-                    {loadingDonors ? (
-                        <div className="flex items-center justify-center p-8 text-gray-400">
-                            <Loader2 className="h-5 w-5 animate-spin text-[#3cc68a] mr-2" />
-                            <span>Loading donors...</span>
-                        </div>
-                    ) : donors.length === 0 ? (
-                        <div className="p-8 text-center text-[13px] text-gray-500">
-                            No recent on-chain donors recorded yet. Be the first to donate!
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-[#21262d]">
-                            <div className="grid grid-cols-[1fr_120px_130px] bg-[#0d1117] px-4 py-2.5 text-[12px] font-medium text-gray-400">
-                                <div>Donor Address</div>
-                                <div>Amount</div>
-                                <div className="text-right">Transaction</div>
-                            </div>
-                            {donors.map((record) => (
-                                <div key={record.txHash} className="grid grid-cols-[1fr_120px_130px] items-center px-4 py-3 text-[13px] bg-[#161b22] hover:bg-[#1f242c]">
-                                    <div className="font-mono text-gray-200 truncate pr-4">
-                                        {shortAddress(record.donorAddress)}
-                                    </div>
-                                    <div className="font-mono font-medium text-[#3cc68a]">
-                                        {formatCkb(record.amountCkb)} <span className="text-[11px] text-gray-400">CKB</span>
-                                    </div>
-                                    <div className="text-right">
-                                        <a
-                                            href={explorerTxUrl(record.txHash)}
-                                            target="_blank"
-                                            rel="noreferrer noopener"
-                                            className="inline-flex items-center gap-1 font-mono text-[12px] text-gray-400 hover:text-gray-200"
-                                        >
-                                            {record.txHash.slice(0, 6)}…{record.txHash.slice(-4)}
-                                            <ArrowUpRight className="h-3 w-3" />
-                                        </a>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </section>
-
-            {/* ────────── Where your support goes ────────── */}
-            <section aria-labelledby="where-it-goes">
-                <h3 id="where-it-goes" className="font-mono text-[11px] uppercase tracking-[0.18em] text-gray-500">
-                    Where your support goes
-                </h3>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    {USES.map(({ icon: Icon, title, body }) => (
-                        <div key={title} className="rounded-xl border border-[#30363d] bg-[#161b22] p-5">
-                            <Icon className="h-5 w-5 text-[#3cc68a]" />
-                            <h4 className="mt-3 text-[14px] font-semibold text-white">{title}</h4>
-                            <p className="mt-1 text-[13px] leading-relaxed text-gray-400">{body}</p>
-                        </div>
-                    ))}
-                </div>
-            </section>
+            )}
         </div>
     );
 }

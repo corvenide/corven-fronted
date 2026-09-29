@@ -1,2 +1,232 @@
 @import "tailwindcss";
 @import '@xterm/xterm/css/xterm.css';
+
+@theme {
+    --color-primary: #4edea3;
+    --color-primary-container: #10b981;
+    --color-primary-fixed: #6ffbbe;
+    --color-primary-fixed-dim: #4edea3;
+    --color-on-primary: #003824;
+    --color-on-primary-container: #00422b;
+    --color-on-primary-fixed: #002113;
+    --color-on-primary-fixed-variant: #005236;
+
+    --color-secondary: #4cd7f6;
+    --color-secondary-container: #03b5d3;
+    --color-secondary-fixed: #acedff;
+    --color-secondary-fixed-dim: #4cd7f6;
+    --color-on-secondary: #003640;
+    --color-on-secondary-container: #00424e;
+    --color-on-secondary-fixed: #001f26;
+    --color-on-secondary-fixed-variant: #004e5c;
+
+    --color-tertiary: #d0bcff;
+    --color-tertiary-container: #b090ff;
+    --color-tertiary-fixed: #e9ddff;
+    --color-tertiary-fixed-dim: #d0bcff;
+    --color-on-tertiary: #3c0091;
+    --color-on-tertiary-container: #4600a7;
+    --color-on-tertiary-fixed: #23005c;
+    --color-on-tertiary-fixed-variant: #5516be;
+
+    --color-surface: #101419;
+    --color-surface-dim: #101419;
+    --color-surface-bright: #36393f;
+    --color-surface-variant: #31353b;
+    --color-surface-tint: #4edea3;
+    --color-surface-container: #1c2025;
+    --color-surface-container-low: #181c21;
+    --color-surface-container-lowest: #0a0e13;
+    --color-surface-container-high: #262a30;
+    --color-surface-container-highest: #31353b;
+
+    --color-on-surface: #e0e2ea;
+    --color-on-surface-variant: #bbcabf;
+    --color-outline: #86948a;
+    --color-outline-variant: #3c4a42;
+
+    --color-background: #101419;
+    --color-on-background: #e0e2ea;
+
+    --color-error: #ffb4ab;
+    --color-error-container: #93000a;
+    --color-on-error: #690005;
+    --color-on-error-container: #ffdad6;
+
+    --spacing-space-xs: 0.25rem;
+    --spacing-space-sm: 0.5rem;
+    --spacing-space-md: 0.75rem;
+    --spacing-space-lg: 1.25rem;
+    --spacing-space-xl: 2rem;
+    --spacing-gutter: 1rem;
+    --spacing-margin: 1.5rem;
+
+    --font-code-sm: "JetBrains Mono", monospace;
+    --font-code-md: "JetBrains Mono", monospace;
+    --font-code-lg: "JetBrains Mono", monospace;
+    --font-label-sm: "JetBrains Mono", monospace;
+    --font-label-md: "Geist", sans-serif;
+    --font-headline-sm: "Geist", sans-serif;
+    --font-headline-md: "Geist", sans-serif;
+    --font-headline-lg: "Geist", sans-serif;
+    --font-headline-xl: "Geist", sans-serif;
+    --font-body-sm: "Geist", sans-serif;
+    --font-body-md: "Geist", sans-serif;
+    --font-body-lg: "Geist", sans-serif;
+
+    --text-label-sm: 9.5px;
+    --text-label-sm--line-height: 13px;
+    --text-label-md: 11px;
+    --text-label-md--line-height: 15px;
+    --text-code-sm: 10px;
+    --text-code-sm--line-height: 14px;
+    --text-code-md: 11px;
+    --text-code-md--line-height: 15px;
+    --text-code-lg: 12px;
+    --text-code-lg--line-height: 17px;
+    --text-body-sm: 11px;
+    --text-body-sm--line-height: 16px;
+    --text-body-md: 12px;
+    --text-body-md--line-height: 17px;
+    --text-body-lg: 13px;
+    --text-body-lg--line-height: 19px;
+    --text-headline-sm: 13px;
+    --text-headline-sm--line-height: 18px;
+    --text-headline-md: 15px;
+    --text-headline-md--line-height: 21px;
+    --text-headline-lg: 19px;
+    --text-headline-lg--line-height: 25px;
+    --text-headline-xl: 24px;
+    --text-headline-xl--line-height: 30px;
+}
+
+/* Explicit font-size and typography utility classes with reduced, compact sizes */
+.text-label-sm {
+    font-size: 9.5px !important;
+    line-height: 13px !important;
+}
+
+.text-label-md {
+    font-size: 11px !important;
+    line-height: 15px !important;
+}
+
+.text-code-sm {
+    font-size: 10px !important;
+    line-height: 14px !important;
+}
+
+.text-code-md {
+    font-size: 11px !important;
+    line-height: 15px !important;
+}
+
+.text-code-lg {
+    font-size: 12px !important;
+    line-height: 17px !important;
+}
+
+.text-body-sm {
+    font-size: 11px !important;
+    line-height: 16px !important;
+}
+
+.text-body-md {
+    font-size: 12px !important;
+    line-height: 17px !important;
+}
+
+.text-body-lg {
+    font-size: 13px !important;
+    line-height: 19px !important;
+}
+
+.text-headline-sm {
+    font-size: 13px !important;
+    line-height: 18px !important;
+}
+
+.text-headline-md {
+    font-size: 15px !important;
+    line-height: 21px !important;
+}
+
+.text-headline-lg {
+    font-size: 19px !important;
+    line-height: 25px !important;
+}
+
+.text-headline-xl {
+    font-size: 24px !important;
+    line-height: 30px !important;
+}
+
+.font-label-sm {
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 500;
+}
+
+.font-label-md {
+    font-family: "Geist", sans-serif;
+    font-weight: 500;
+}
+
+.font-code-sm {
+    font-family: "JetBrains Mono", monospace;
+}
+
+.font-code-md {
+    font-family: "JetBrains Mono", monospace;
+}
+
+.font-code-lg {
+    font-family: "JetBrains Mono", monospace;
+}
+
+.font-body-sm {
+    font-family: "Geist", sans-serif;
+}
+
+.font-body-md {
+    font-family: "Geist", sans-serif;
+}
+
+.font-body-lg {
+    font-family: "Geist", sans-serif;
+}
+
+.font-headline-sm {
+    font-family: "Geist", sans-serif;
+    font-weight: 500;
+}
+
+.font-headline-md {
+    font-family: "Geist", sans-serif;
+    font-weight: 600;
+}
+
+.font-headline-lg {
+    font-family: "Geist", sans-serif;
+    font-weight: 600;
+}
+
+.font-headline-xl {
+    font-family: "Geist", sans-serif;
+    font-weight: 600;
+}
+
+.material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 18px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}

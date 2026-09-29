@@ -481,14 +481,14 @@ async function startServer() {
         const gasUsed = txCount * 21000 + Math.floor(Math.random() * 100000);
         const hash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
         const parentHash = blocks[0]?.hash || "0x77d8811bc917af5299fa00a112cd9e8c3b4cf7f2898991bc2e89fa3c4cf7f2aa";
-        
+
         const possibleTxs = [
           `0x${hash.slice(2, 5)}...${hash.slice(-4)} transferred ${(Math.random() * 10).toFixed(2)} FIBER`,
           `0x${hash.slice(6, 9)}...${hash.slice(-5)} updated contract state`,
           `0x${hash.slice(10, 13)}...${hash.slice(-3)} triggered event 'Transfer'`,
           `0x${hash.slice(3, 6)}...${hash.slice(-4)} called FiberToken 'mint'`
         ];
-        
+
         const txs = Array.from({ length: txCount }, () => possibleTxs[Math.floor(Math.random() * possibleTxs.length)]);
 
         const newBlock = {
@@ -696,17 +696,17 @@ async function startServer() {
 
   app.get(["/auth/callback", "/auth/callback/"], (req, res) => {
     const { username, email } = req.query;
-    
+
     const userNameStr = (username as string) || "github-coder";
     const emailStr = (email as string) || "coder@github.com";
-    
+
     currentUserSession = {
       email: emailStr,
       username: userNameStr,
       avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(userNameStr)}`,
       provider: "github"
     };
-    
+
     if (!registeredUsers.some(u => u.email === emailStr)) {
       registeredUsers.push({
         email: emailStr,
@@ -788,7 +788,7 @@ async function startServer() {
   app.post("/api/node/restart", (req, res) => {
     nodeStatus = "Restarting";
     nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Restart requested. Initiating safe node shutdown...`);
-    
+
     setTimeout(() => {
       nodeStatus = "Synchronizing";
       nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Loading persistent blockchain databases...`);
@@ -807,7 +807,7 @@ async function startServer() {
   app.post("/api/node/reset", (req, res) => {
     nodeStatus = "Resetting";
     nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] WARN: Hard reset requested. Purging local chain database...`);
-    
+
     setTimeout(() => {
       blockHeight = 0;
       uptimeSeconds = 0;
@@ -837,7 +837,7 @@ async function startServer() {
     const ip = `${Math.floor(Math.random() * 220 + 20)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
     const region = ["US-East", "AP-Southeast", "EU-Central", "AP-Northeast", "SA-East"][Math.floor(Math.random() * 5)];
     const client = ["Fiber/v1.0.4", "Geth/v1.12.0", "Fiber/v1.0.3"][Math.floor(Math.random() * 3)];
-    
+
     const newPeer = {
       id: name,
       address: ip,
@@ -866,10 +866,10 @@ async function startServer() {
   app.post("/api/node/deploy", (req, res) => {
     const { filename, fileContent } = req.body;
     const cleanName = filename || "main.go";
-    
+
     nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Compiling workspace source files...`);
     nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Building Go package: fiber-app (target: linux/amd64)`);
-    
+
     setTimeout(() => {
       nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Build successful. Output bundle: fiber-app.bin (4.85 MB)`);
       nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Signing deploying transaction with default dev key 0xDevKey...`);
@@ -879,7 +879,7 @@ async function startServer() {
       // Add custom transaction to node mempool & push to logs
       const txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
       nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Contract transaction ${txHash.slice(0, 16)}... submitted to local node mempool`);
-      
+
       // Inject transaction into active block immediately
       blockHeight++;
       const newBlock = {
@@ -904,7 +904,7 @@ async function startServer() {
   // Action: Gemini AI Assistant Endpoint
   app.post("/api/ai/chat", async (req, res) => {
     const { prompt, currentFile, fileContent, mode } = req.body;
-    
+
     if (!prompt) {
       return res.status(400).json({ error: "Prompt is required" });
     }
@@ -916,7 +916,7 @@ async function startServer() {
         ai = getGemini();
       } catch (err: any) {
         console.warn("Gemini client initialization failed (likely missing API key):", err.message);
-        
+
         // Mock fallback responses so the app is 100% functional even without a key
         let mockReply = "";
         if (mode === "explain") {
@@ -956,7 +956,7 @@ Please go to **Settings > Secrets** and declare a **GEMINI_API_KEY** environment
 
       // Build context and system instruction
       let systemInstruction = "You are an expert Go backend engineer and senior core blockchain compiler specialist. You write hyper-optimized, clean, safe, high-performance web APIs using the github.com/gofiber/fiber/v2 framework. Keep your replies structured, clear, professional, and focus primarily on executable code segments and direct annotations.";
-      
+
       let contents = "";
       if (mode === "explain") {
         contents = `Please explain the following Go file "${currentFile || "post.go"}":\n\n\`\`\`go\n${fileContent || ""}\n\`\`\`\n\nPrompt: ${prompt}`;

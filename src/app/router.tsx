@@ -10,7 +10,7 @@ import DashboardPage from '../pages/DashboardPage';
 import IdePage from '../pages/IdePage';
 import NodesPage from '../pages/NodePage';
 import SettingsPage from '../pages/SettingsPage';
-// import NotFoundPage from '../pages/NotFoundPage';
+import NotFoundPage from '../pages/NotFoundPage';
 
 export const router = createBrowserRouter([
     {
@@ -68,6 +68,10 @@ export const router = createBrowserRouter([
     {
         // Redirect old /community route to dashboard (community tab is now in dashboard)
         path: '/community',
-        element: <Navigate to="/dashboard" replace />,
+        element: <Navigate to="/dashboard?tab=community" replace />,
+    },
+    {
+        path: '*',
+        element: <NotFoundPage />,
     },
 ]);

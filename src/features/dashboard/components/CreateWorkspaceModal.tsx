@@ -1,49 +1,28 @@
 // src/features/dashboard/components/CreateWorkspaceModal.tsx
-import React, { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-
-import { Modal } from '../../../components/ui/Modal';
+import React, { useState } from 'react';
 import { useWorkspaces } from '../hooks/useWorkspaces';
-import { workspaceApi } from '../../workspace/api/workspace.api';
 import type { Workspace } from '../../workspace/types/workspace.types';
 
 interface CreateWorkspaceModalProps {
     isOpen: boolean;
     onClose: () => void;
-    /** Fired after the workspace is successfully created. */
     onCreated: (workspace: Workspace) => void;
-    /** Pre-selects a template. */
     initialTemplateId?: string;
 }
-
-const DEFAULT_TEMPLATE_ID = 'hello-world';
 
 export function CreateWorkspaceModal({
     isOpen,
     onClose,
     onCreated,
-    initialTemplateId,
+    initialTemplateId = 'hello-world',
 }: CreateWorkspaceModalProps) {
-    const {
-        createWorkspace,
-        isCreating,
-        createError,
-        resetCreateError,
-    } = useWorkspaces();
+    const { createWorkspace, isCreating, createError, resetCreateError } = useWorkspaces();
 
     const [name, setName] = useState('');
-    const [templateId, setTemplateId] = useState(initialTemplateId ?? DEFAULT_TEMPLATE_ID);
+    const [selectedFramework, setSelectedFramework] = useState<'rust' | 'c'>('rust');
+    const [prewarm, setPrewarm] = useState(true);
 
-    const templates = useQuery({
-        queryKey: ['workspace-templates'],
-        queryFn: () => workspaceApi.templates(),
-        enabled: isOpen,
-        staleTime: Infinity,
-    });
-
-    useEffect(() => {
-        if (isOpen) setTemplateId(initialTemplateId ?? DEFAULT_TEMPLATE_ID);
-    }, [isOpen, initialTemplateId]);
+    if (!isOpen) return null;
 
     const handleClose = () => {
         if (isCreating) return;
@@ -52,133 +31,130 @@ export function CreateWorkspaceModal({
         onClose();
     };
 
-    const handleSubmit = async (
-        e: React.FormEvent<HTMLFormElement>,
-    ) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim() || isCreating) return;
 
-        const workspace = await createWorkspace({
-            name: name.trim(),
-            templateId,
-        });
+        const templateId = selectedFramework === 'rust' ? (initialTemplateId || 'hello-world') : 'c-native';
 
-        onCreated(workspace);
-        handleClose();
+        try {
+            const workspace = await createWorkspace({
+                name: name.trim(),
+                templateId,
+            });
+
+            onCreated(workspace);
+            setName('');
+            onClose();
+        } catch {
+            // Handled by createError
+        }
     };
 
     return (
-        <Modal
-            isOpen={isOpen}
-            onClose={handleClose}
-            title="Create Workspace"
-            footer={
-                <>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 animate-fade-in">
+            <div className="w-full max-w-md bg-surface-container rounded-lg shadow-2xl flex flex-col overflow-hidden border border-outline-variant/30">
+                {/* Modal Header */}
+                <div className="px-3.5 py-2.5 bg-surface-container-high flex items-center justify-between border-b border-outline-variant/20">
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px] text-primary">add_box</span>
+                        <h2 className="text-[12.5px] font-semibold text-on-surface tracking-tight">Create New Workspace</h2>
+                    </div>
                     <button
+                        onClick={handleClose}
+                        className="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
                         type="button"
+                    >
+                        <span className="material-symbols-outlined text-[15px]">close</span>
+                    </button>
+                </div>
+
+                {/* Modal Body */}
+                <form id="new-workspace-form" onSubmit={handleSubmit} className="p-3.5 flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] uppercase font-semibold tracking-wider text-on-surface-variant" htmlFor="workspace-name-input">
+                            Workspace Name
+                        </label>
+                        <input
+                            id="workspace-name-input"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-surface-container-lowest rounded text-on-surface placeholder:text-on-surface-variant/40 text-[11px] font-mono border border-outline-variant/20 focus:border-primary focus:outline-none transition-colors"
+                            placeholder="e.g. ckb-amm-swap"
+                            autoFocus
+                            required
+                        />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] uppercase font-semibold tracking-wider text-on-surface-variant">Framework & Runtime</label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                            <div
+                                onClick={() => setSelectedFramework('rust')}
+                                className={`p-2 rounded cursor-pointer flex flex-col gap-0.5 border transition-all ${selectedFramework === 'rust'
+                                        ? 'bg-surface-container-high border-primary/50 text-primary'
+                                        : 'bg-surface-container-lowest border-outline-variant/20 hover:bg-surface-container-high text-on-surface'
+                                    }`}
+                            >
+                                <span className="text-[11px] font-medium leading-tight">Rust Capsule</span>
+                                <span className="text-[9.5px] font-mono text-on-surface-variant leading-tight">Recommended for high security</span>
+                            </div>
+
+                            <div
+                                onClick={() => setSelectedFramework('c')}
+                                className={`p-2 rounded cursor-pointer flex flex-col gap-0.5 border transition-all ${selectedFramework === 'c'
+                                        ? 'bg-surface-container-high border-primary/50 text-primary'
+                                        : 'bg-surface-container-lowest border-outline-variant/20 hover:bg-surface-container-high text-on-surface'
+                                    }`}
+                            >
+                                <span className="text-[11px] font-medium leading-tight">C Native</span>
+                                <span className="text-[9.5px] font-mono text-on-surface-variant leading-tight">Ultra-compact cycle size</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-0.5">
+                        <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setPrewarm(!prewarm)}>
+                            <input
+                                checked={prewarm}
+                                onChange={(e) => setPrewarm(e.target.checked)}
+                                className="accent-primary rounded cursor-pointer w-3.5 h-3.5"
+                                id="prewarm"
+                                type="checkbox"
+                            />
+                            <label className="text-[10.5px] text-on-surface-variant cursor-pointer select-none" htmlFor="prewarm">
+                                Prewarm Devnet on creation
+                            </label>
+                        </div>
+                    </div>
+
+                    {createError && (
+                        <p className="text-[10px] text-error font-medium">
+                            {createError instanceof Error ? createError.message : 'Failed to create workspace. Try again.'}
+                        </p>
+                    )}
+                </form>
+
+                {/* Modal Footer */}
+                <div className="px-3.5 py-2.5 bg-surface-container-lowest flex items-center justify-end gap-2 border-t border-outline-variant/20">
+                    <button
                         onClick={handleClose}
                         disabled={isCreating}
-                        className="rounded-lg border border-[#30363d] px-4 py-2 text-xs font-semibold text-gray-300 transition-colors hover:bg-[#21262d] disabled:opacity-50"
+                        className="px-2.5 py-1 rounded text-on-surface-variant hover:text-on-surface text-[10.5px] font-medium transition-colors"
+                        type="button"
                     >
                         Cancel
                     </button>
-
                     <button
                         type="submit"
-                        form="create-workspace-form"
+                        form="new-workspace-form"
                         disabled={!name.trim() || isCreating}
-                        className="rounded-lg bg-[#1f6feb] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#388bfd] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="px-3 py-1 rounded bg-primary text-on-primary text-[10.5px] font-semibold hover:bg-primary-fixed transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                     >
-                        {isCreating
-                            ? 'Creating...'
-                            : 'Create Workspace'}
+                        {isCreating ? 'Creating Environment...' : 'Create Environment'}
                     </button>
-                </>
-            }
-        >
-            <form
-                id="create-workspace-form"
-                onSubmit={handleSubmit}
-                className="flex flex-col gap-5"
-            >
-                <div className="flex flex-col gap-2">
-                    <label
-                        htmlFor="workspace-name"
-                        className="text-[11px] font-semibold uppercase tracking-wide text-gray-400"
-                    >
-                        Workspace name
-                    </label>
-                    <input
-                        id="workspace-name"
-                        type="text"
-                        value={name}
-                        onChange={(e) =>
-                            setName(e.target.value)
-                        }
-                        placeholder="my-token"
-                        autoFocus
-                        className="rounded-lg border border-[#30363d] bg-[#0d1117] px-3 py-2 font-mono text-sm text-gray-200 outline-none placeholder:text-gray-600 focus:border-[#1f6feb]"
-                    />
                 </div>
-
-                <fieldset className="flex flex-col gap-2">
-                    <legend className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                        Start from
-                    </legend>
-
-                    {templates.isLoading && (
-                        <p className="text-xs text-gray-500">Loading templates…</p>
-                    )}
-
-                    {templates.isError && (
-                        <p className="text-xs text-gray-500">
-                            Couldn't load templates; the workspace starts from Hello world.
-                        </p>
-                    )}
-
-                    {templates.data?.map((template) => {
-                        const selected = template.id === templateId;
-                        return (
-                            <label
-                                key={template.id}
-                                className={`flex cursor-pointer gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
-                                    selected
-                                        ? 'border-[#1f6feb] bg-[#1f6feb]/10'
-                                        : 'border-[#30363d] hover:border-[#484f58]'
-                                }`}
-                            >
-                                <input
-                                    type="radio"
-                                    name="template"
-                                    value={template.id}
-                                    checked={selected}
-                                    onChange={() => setTemplateId(template.id)}
-                                    className="mt-0.5 accent-[#1f6feb]"
-                                />
-                                <span className="min-w-0">
-                                    <span className="block text-[13px] font-semibold text-gray-200">
-                                        {template.name}
-                                    </span>
-                                    <span className="mt-0.5 block text-[12px] leading-[1.45] text-gray-400">
-                                        {template.description}
-                                    </span>
-                                    <span className="mt-1 block font-mono text-[11px] text-gray-500">
-                                        contracts/{template.contracts.join(', contracts/')}
-                                    </span>
-                                </span>
-                            </label>
-                        );
-                    })}
-                </fieldset>
-
-                {createError && (
-                    <p className="text-xs text-rose-400">
-                        {createError instanceof Error
-                            ? createError.message
-                            : 'Failed to create workspace. Try again.'}
-                    </p>
-                )}
-            </form>
-        </Modal>
+            </div>
+        </div>
     );
 }

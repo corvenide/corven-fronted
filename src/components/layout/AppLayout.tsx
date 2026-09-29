@@ -1,164 +1,38 @@
 // src/components/layout/AppLayout.tsx
-//
-// Shell for signed-in pages: a top bar (brand, where you are, account) and a
-// slim navigation rail. The IDE gets the full remaining height.
-
-import type { ReactNode } from 'react';
-import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { BookOpen, ChevronRight, Globe, LayoutGrid, Network, Settings, Wallet } from 'lucide-react';
+import { useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ccc } from '@ckb-ccc/connector-react';
 
 import { useAuth } from '../../features/auth/hooks/useAuth';
-import { workspaceApi } from '../../features/workspace/api/workspace.api';
-import { workspaceKeys } from '../../features/workspace/queries/workspace.keys';
 import { UserMenu } from './UserMenu';
-
-function NetworkSelector() {
-    const { client, setClient } = ccc.useCcc();
-
-    const clientOptions = [
-        { name: 'CKB Mainnet', client: new ccc.ClientPublicMainnet() },
-        { name: 'CKB Testnet', client: new ccc.ClientPublicTestnet() },
-    ];
-
-    const currentClientName =
-        clientOptions.find((opt) => opt.client.addressPrefix === client?.addressPrefix)?.name ??
-        (client?.addressPrefix === 'ckb' ? 'CKB Mainnet' : 'CKB Testnet');
-
-    return (
-        <div className="relative flex items-center">
-            <label className="sr-only">Switch CKB Network</label>
-            <div className="flex h-8 items-center gap-1.5 rounded-md border border-[#30363d] bg-[#161b22] px-2.5 text-[12px] font-medium text-gray-200 transition-colors hover:border-gray-500">
-                <Globe className="h-3.5 w-3.5 text-[#3cc68a]" />
-                <select
-                    value={currentClientName}
-                    onChange={(e) => {
-                        const selected = clientOptions.find((opt) => opt.name === e.target.value);
-                        if (selected) {
-                            setClient(selected.client);
-                        }
-                    }}
-                    className="cursor-pointer bg-transparent text-gray-200 outline-none"
-                >
-                    {clientOptions.map((opt) => (
-                        <option key={opt.name} value={opt.name} className="bg-[#161b22] text-gray-200">
-                            {opt.name}
-                        </option>
-                    ))}
-                </select>
-            </div>
-        </div>
-    );
-}
-
-function WalletButton() {
-    const { open, wallet } = ccc.useCcc();
-    const signer = ccc.useSigner();
-
-    return (
-        <button
-            type="button"
-            onClick={() => open()}
-            className="flex h-8 items-center gap-1.5 rounded-md border border-[#30363d] bg-[#161b22] px-2.5 text-[12px] font-medium text-gray-200 transition-colors hover:border-gray-500 hover:bg-[#21262d]"
-        >
-            <Wallet className="h-3.5 w-3.5 text-[#3cc68a]" />
-            <span>{wallet ? wallet.name : 'Connect Wallet'}</span>
-        </button>
-    );
-}
-
-const LOGO_URL =
-    'https://res.cloudinary.com/dswyz4vpp/image/upload/v1785082590/ChatGPT_Image_Jul_26__2026__01_05_52_PM-removebg-preview_wua44l.png';
 
 const DOCS_URL = 'https://docs.nervos.org/';
 
-const STATUS_DOT: Record<string, string> = {
-    RUNNING: 'bg-emerald-400',
-    PROVISIONING: 'bg-[#58a6ff] animate-pulse',
-    FAILED: 'bg-rose-400',
-    IDLE: 'bg-amber-400',
-};
-
-interface NavItem {
-    to: string;
-    label: string;
-    icon: ReactNode;
-    /** Also active on these path prefixes. */
-    match?: string[];
-}
-
-const NAV: NavItem[] = [
-    { to: '/dashboard', label: 'Workspaces', icon: <LayoutGrid className="h-[18px] w-[18px]" />, match: ['/ide'] },
-    { to: '/nodes', label: 'Devnets', icon: <Network className="h-[18px] w-[18px]" /> },
-];
-
-function RailLink({ item }: { item: NavItem }) {
-    const location = useLocation();
-    const active =
-        location.pathname.startsWith(item.to) || (item.match ?? []).some((prefix) => location.pathname.startsWith(prefix));
-
-    return (
-        <NavLink
-            to={item.to}
-            aria-label={item.label}
-            aria-current={active ? 'page' : undefined}
-            className={`group relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${active ? 'bg-[#21262d] text-white' : 'text-gray-500 hover:bg-[#161b22] hover:text-gray-200'
-                }`}
-        >
-            {active && <span className="absolute -left-2 top-2 bottom-2 w-0.5 rounded-r bg-[#3cc68a]" />}
-            {item.icon}
-            <span className="pointer-events-none absolute left-12 z-50 whitespace-nowrap rounded-md border border-[#30363d] bg-[#161b22] px-2 py-1 text-[12px] text-gray-200 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                {item.label}
-            </span>
-        </NavLink>
-    );
-}
-
-/** "Workspaces / my-contract ●" in the IDE; the page name elsewhere. */
-function Breadcrumb() {
-    const location = useLocation();
-    // The layout sits above the IDE route, so read the id from the URL.
-    const workspaceId = useMatch('/ide/:workspaceId')?.params.workspaceId;
-
-    const workspace = useQuery({
-        queryKey: workspaceKeys.detail(workspaceId ?? 'none'),
-        queryFn: () => workspaceApi.get(workspaceId!),
-        enabled: Boolean(workspaceId),
-    });
-
-    const page = location.pathname.startsWith('/nodes')
-        ? 'Devnets'
-        : location.pathname.startsWith('/settings')
-            ? 'Settings'
-            : 'Workspaces';
-
-    if (!workspaceId) {
-        return <span className="truncate text-[13px] font-medium text-gray-200">{page}</span>;
-    }
-
-    return (
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[13px]">
-            <Link to="/dashboard" className="shrink-0 text-gray-400 hover:text-gray-200">
-                Workspaces
-            </Link>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-600" />
-            <span className="flex min-w-0 items-center gap-2 font-medium text-gray-100">
-                <span className="truncate">{workspace.data?.name ?? '…'}</span>
-                {workspace.data && (
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[workspace.data.status] ?? 'bg-gray-500'}`} />
-                )}
-            </span>
-        </nav>
-    );
+function shortenAddress(address?: string | null): string {
+    if (!address) return 'ckt1qrej...9f6ccr';
+    if (address.length <= 16) return address;
+    return `${address.slice(0, 8)}...${address.slice(-6)}`;
 }
 
 export default function AppLayout() {
     const location = useLocation();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { user, logout } = useAuth();
+    const { open, wallet } = ccc.useCcc();
 
     const inIde = location.pathname.startsWith('/ide');
+    const currentTab = searchParams.get('tab');
+
+    const isWorkspacesActive =
+        (location.pathname === '/dashboard' && (!currentTab || currentTab === 'workspaces')) ||
+        location.pathname.startsWith('/ide');
+    const isCommunityActive =
+        location.pathname === '/community' ||
+        (location.pathname === '/dashboard' && currentTab === 'community');
+    const isDonateActive =
+        location.pathname === '/donate' ||
+        (location.pathname === '/dashboard' && currentTab === 'donate');
 
     const signOut = async () => {
         await logout();
@@ -166,71 +40,182 @@ export default function AppLayout() {
     };
 
     return (
-        <div className="flex h-screen flex-col bg-[#0d1117] font-sans text-gray-200 antialiased">
-            {/* ---------------------------------------------------------- Top bar */}
-            <header className="flex h-12 shrink-0 items-center gap-3 border-b border-[#30363d] bg-[#010409] pl-3 pr-3 sm:pr-4">
-                <Link to="/dashboard" className="flex h-8 shrink-0 items-center gap-2 rounded-md pr-1" aria-label="Corven workspaces">
-                    <img src={LOGO_URL} alt="" className="h-6 w-6 object-contain" />
-                    <span className="hidden text-[14.5px] font-semibold tracking-[-0.02em] text-white sm:inline">Corven</span>
-                </Link>
+        <div className="bg-surface font-body-md text-on-surface antialiased min-h-screen flex flex-col">
+            {/* Top Fixed Header (h-14) */}
+            <header className="fixed top-0 left-0 right-0 h-14 z-50 bg-surface-container-lowest border-b border-outline-variant/30 flex items-center justify-between px-space-md">
+                <div className="flex items-center gap-space-lg">
+                    {/* Brand Logo */}
+                    <Link to="/dashboard" className="flex items-center gap-space-sm pl-space-xs group">
+                        <div className="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center border border-outline-variant/50 text-primary transition-transform group-hover:scale-105">
+                            <span className="material-symbols-outlined text-[18px]">deployed_code</span>
+                        </div>
+                        <span className="font-headline-sm text-headline-sm font-semibold tracking-tight text-on-surface">Corven</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-code-sm bg-surface-container text-primary border border-outline-variant/40 uppercase tracking-wider">
+                            IDE
+                        </span>
+                    </Link>
 
-                <span className="h-5 w-px shrink-0 bg-[#30363d]" aria-hidden />
+                    {/* Navigation Tabs */}
+                    <nav className="hidden md:flex items-center gap-space-xs">
+                        <Link
+                            to="/dashboard"
+                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${isWorkspacesActive
+                                    ? 'bg-surface-container text-on-surface font-medium rounded-lg border border-outline-variant/40'
+                                    : 'rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                                }`}
+                        >
+                            Workspaces
+                        </Link>
 
-                <div className="min-w-0 flex-1">
-                    <Breadcrumb />
+                        <Link
+                            to="/dashboard?tab=community"
+                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${isCommunityActive
+                                    ? 'bg-surface-container text-on-surface font-medium rounded-lg border border-outline-variant/40'
+                                    : 'rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                                }`}
+                        >
+                            <span>Community</span>
+                            <span className="px-1 py-0.2 rounded text-[10px] font-label-sm bg-surface-container-high text-secondary border border-outline-variant/30">
+                                NEW
+                            </span>
+                        </Link>
+
+                        <Link
+                            to="/dashboard?tab=donate"
+                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${isDonateActive
+                                    ? 'bg-surface-container text-on-surface font-medium rounded-lg border border-outline-variant/40'
+                                    : 'rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                                }`}
+                        >
+                            <span>Donate</span>
+                            <span className="px-1 py-0.2 rounded text-[10px] font-code-sm bg-primary/10 text-primary border border-primary/20">
+                                CKB
+                            </span>
+                        </Link>
+                    </nav>
                 </div>
 
-                <a
-                    href={DOCS_URL}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="hidden h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] text-gray-400 transition-colors hover:bg-[#21262d] hover:text-gray-200 md:flex"
-                >
-                    <BookOpen className="h-3.5 w-3.5" />
-                    CKB docs
-                </a>
+                {/* Right controls */}
+                <div className="flex items-center gap-space-md">
+                    <a
+                        className="hidden lg:block px-space-sm py-1 font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors"
+                        href={DOCS_URL}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                    >
+                        CKB Docs
+                    </a>
 
-                <NetworkSelector />
+                    {/* Devnet status badge */}
+                    <div className="hidden sm:flex items-center gap-space-xs px-2.5 py-1 rounded-full bg-surface-container-low border border-outline-variant/30 font-code-sm text-code-sm text-on-surface-variant">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                        <span className="text-on-surface">Devnet Connected:</span>
+                        <span className="text-primary font-medium">24 ms</span>
+                    </div>
 
-                {/* <WalletButton /> */}
+                    {/* Connected wallet button */}
+                    <button
+                        type="button"
+                        onClick={() => open()}
+                        className="flex items-center gap-space-xs px-2 py-1 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 font-code-sm text-code-sm text-on-surface transition-colors"
+                        title="Wallet Settings"
+                    >
+                        <span className="material-symbols-outlined text-[14px] text-secondary">account_balance_wallet</span>
+                        <span className="text-on-surface-variant font-code-sm text-code-sm">
+                            {shortenAddress(user?.walletAddress)}
+                        </span>
+                        <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center ml-0.5 border border-primary/40">
+                            <span className="material-symbols-outlined text-[12px]">token</span>
+                        </div>
+                    </button>
 
-                {user && <UserMenu user={user} onSignOut={() => void signOut()} />}
+                    {/* User profile avatar / menu */}
+                    {user ? (
+                        <UserMenu user={user} onSignOut={() => void signOut()} />
+                    ) : (
+                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                            <span className="material-symbols-outlined text-on-primary text-[18px]">person</span>
+                        </div>
+                    )}
+                </div>
             </header>
 
-            <div className="flex min-h-0 flex-1">
-                {/* ------------------------------------------------------ Rail */}
-                <nav
-                    aria-label="Main"
-                    className="hidden w-14 shrink-0 flex-col items-center gap-1.5 border-r border-[#30363d] bg-[#010409] py-3 sm:flex"
-                >
-                    {NAV.map((item) => (
-                        <RailLink key={item.to} item={item} />
-                    ))}
-                    <div className="flex-1" />
-                    <RailLink item={{ to: '/settings', label: 'Settings', icon: <Settings className="h-[18px] w-[18px]" /> }} />
+            {/* Left Sidebar Fixed Rail (w-14) */}
+            <aside className="fixed left-0 top-14 bottom-0 w-14 z-40 bg-surface-container-lowest border-r border-outline-variant/30 flex flex-col items-center justify-between py-space-sm">
+                <nav className="w-full flex flex-col items-center gap-space-xs px-1.5">
+                    <NavLink
+                        to="/dashboard"
+                        title="Workspaces"
+                        className={({ isActive }) =>
+                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isActive && !currentTab
+                                ? 'bg-surface-container text-primary border border-outline-variant/50'
+                                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                            }`
+                        }
+                    >
+                        <span className="material-symbols-outlined text-[20px]">code_blocks</span>
+                    </NavLink>
+
+                    <Link
+                        to="/dashboard"
+                        title="Cell Dependency Graph"
+                        className="w-10 h-10 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60 transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">account_tree</span>
+                    </Link>
+
+                    <Link
+                        to="/nodes"
+                        title="Execution & Terminal Logs"
+                        className="w-10 h-10 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60 transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">terminal</span>
+                    </Link>
+
+                    <Link
+                        to="/dashboard"
+                        title="Contract Explorer"
+                        className="w-10 h-10 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60 transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">data_object</span>
+                    </Link>
                 </nav>
 
-                {/* ------------------------------------------------------ Page */}
-                <main className={`min-w-0 flex-1 ${inIde ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+                <div className="w-full flex flex-col items-center gap-space-xs px-1.5">
+                    <NavLink
+                        to="/nodes"
+                        title="Node & Network"
+                        className={({ isActive }) =>
+                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isActive
+                                ? 'bg-surface-container text-primary border border-outline-variant/50'
+                                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                            }`
+                        }
+                    >
+                        <span className="material-symbols-outlined text-[20px]">dns</span>
+                    </NavLink>
+
+                    <NavLink
+                        to="/settings"
+                        title="IDE Settings"
+                        className={({ isActive }) =>
+                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isActive
+                                ? 'bg-surface-container text-primary border border-outline-variant/50'
+                                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                            }`
+                        }
+                    >
+                        <span className="material-symbols-outlined text-[20px]">settings</span>
+                    </NavLink>
+                </div>
+            </aside>
+
+            {/* Main content body */}
+            <div className="pl-14 flex-1 flex flex-col">
+                <main className={`w-full pt-14 bg-surface min-h-screen ${inIde ? 'overflow-hidden' : ''}`}>
                     <Outlet />
                 </main>
             </div>
-
-            {/* ---------------------------------------------------------- Mobile nav */}
-            <nav aria-label="Main" className="flex h-12 shrink-0 items-center justify-around border-t border-[#30363d] bg-[#010409] sm:hidden">
-                {[...NAV, { to: '/settings', label: 'Settings', icon: <Settings className="h-[18px] w-[18px]" /> }].map((item) => (
-                    <NavLink
-                        key={item.to}
-                        to={item.to}
-                        className={({ isActive }) =>
-                            `flex flex-col items-center gap-0.5 px-3 text-[10.5px] ${isActive ? 'text-white' : 'text-gray-500'}`
-                        }
-                    >
-                        {item.icon}
-                        {item.label}
-                    </NavLink>
-                ))}
-            </nav>
         </div>
     );
 }
