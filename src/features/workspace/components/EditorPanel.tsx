@@ -55,25 +55,25 @@ type BindingsStatus =
 const editorTheme = EditorView.theme({
     '&': {
         height: '100%',
-        backgroundColor: '#0d1117',
-        fontSize: '12px',
+        backgroundColor: '#101419',
+        fontSize: '11.5px',
     },
     '.cm-scroller': {
         fontFamily:
-            'ui-monospace, SFMono-Regular, Menlo, monospace',
+            '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
         lineHeight: '1.6',
     },
     '.cm-gutters': {
-        backgroundColor: '#0d1117',
-        borderRight: '1px solid rgb(31 41 55 / 0.5)',
-        color: '#6b7280',
+        backgroundColor: '#101419',
+        borderRight: '1px solid rgba(60, 74, 66, 0.4)',
+        color: '#86948a',
     },
     '.cm-activeLine': {
-        backgroundColor: 'rgba(110, 118, 129, 0.08)',
+        backgroundColor: 'rgba(78, 222, 163, 0.04)',
     },
     '.cm-activeLineGutter': {
         backgroundColor: 'transparent',
-        color: '#9ca3af',
+        color: '#4edea3',
     },
     '&.cm-focused': {
         outline: 'none',
@@ -150,7 +150,7 @@ export function EditorPanel({
 
     if (isLoading) {
         return (
-            <div className="flex flex-1 items-center justify-center text-sm text-gray-500">
+            <div className="flex flex-1 items-center justify-center text-[12px] font-mono text-on-surface-variant">
                 Loading file...
             </div>
         );
@@ -158,28 +158,32 @@ export function EditorPanel({
 
     if (!file) {
         return (
-            <div className="flex flex-1 items-center justify-center text-sm text-gray-500">
+            <div className="flex flex-1 items-center justify-center text-[12px] font-mono text-on-surface-variant">
                 Select a file to start editing.
             </div>
         );
     }
 
     return (
-        <section className="flex min-w-0 flex-1 flex-col">
-            <div className="flex h-11 items-center border-b border-[#30363d] bg-[#161b22]">
-                <div className="flex h-full items-center gap-2 border-r border-t-2 border-r-[#30363d] border-t-[#1f6feb] bg-[#0d1117] px-4 text-[#58a6ff]">
+        <section className="flex min-w-0 flex-1 flex-col bg-surface">
+            {/* Tab header */}
+            <div className="flex h-9 items-center border-b border-outline-variant/30 bg-surface-container-low px-2">
+                <div className="flex h-full items-center gap-1.5 border-r border-t-2 border-r-outline-variant/20 border-t-primary bg-surface px-3 text-primary text-[11px] font-mono">
                     <FileCode className="h-3.5 w-3.5" />
 
-                    <span className="font-mono text-xs">
+                    <span>
                         {file.name}
                         {isDirty && ' •'}
                     </span>
                 </div>
             </div>
 
-            <div className="flex h-9 items-center justify-between border-b border-[#30363d]/60 px-4">
-                <span className="truncate font-mono text-[11px] text-gray-500">
-                    WORKSPACE &gt; {file.path}
+            {/* Breadcrumb & Action bar */}
+            <div className="flex h-8 items-center justify-between border-b border-outline-variant/20 bg-surface-container px-3">
+                <span className="truncate font-mono text-[10.5px] text-on-surface-variant flex items-center gap-1">
+                    <span className="text-primary font-medium">WORKSPACE</span>
+                    <span>/</span>
+                    <span>{file.path}</span>
                 </span>
 
                 <div className="flex shrink-0 items-center gap-1.5">
@@ -190,12 +194,12 @@ export function EditorPanel({
                         disabled={bindings.state === 'running'}
                         onClick={() => void generateBindings(language)}
                         title={`Run moleculec and write ${file.name.replace(/\.mol$/i, language === 'rust' ? '.rs' : '.h')} next to this schema`}
-                        className="flex items-center gap-1 rounded border border-[#30363d] bg-[#21262d] px-2.5 py-1 text-[11px] text-gray-300 hover:border-[#484f58] disabled:opacity-50"
+                        className="flex items-center gap-1 rounded border border-outline-variant/30 bg-surface-container-high px-2 py-0.5 text-[10.5px] font-mono text-secondary hover:border-secondary/50 disabled:opacity-50 transition-colors"
                     >
                         {bindings.state === 'running' && bindings.language === language ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
-                            <Wand2 className="h-3.5 w-3.5" />
+                            <Wand2 className="h-3 w-3" />
                         )}
                         {language === 'rust' ? 'Rust bindings' : 'C header'}
                     </button>
@@ -209,12 +213,16 @@ export function EditorPanel({
                     onClick={() =>
                         void onSave()
                     }
-                    className="flex items-center gap-1 rounded border border-[#30363d] bg-[#21262d] px-2.5 py-1 text-[11px] text-gray-300 disabled:opacity-50"
+                    className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10.5px] font-mono transition-colors disabled:opacity-50 ${
+                        isDirty
+                            ? 'border-primary/50 bg-primary/10 text-primary font-medium hover:bg-primary/20'
+                            : 'border-outline-variant/30 bg-surface-container-high text-on-surface-variant'
+                    }`}
                 >
                     {isDirty ? (
-                        <Save className="h-3.5 w-3.5" />
+                        <Save className="h-3 w-3" />
                     ) : (
-                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                        <Check className="h-3 w-3 text-primary" />
                     )}
 
                     {isSaving
@@ -272,6 +280,7 @@ export function EditorPanel({
                         bracketMatching: true,
                         closeBrackets: true,
                         indentOnInput: true,
+                        tabSize: 4,
                     }}
                 />
             </div>

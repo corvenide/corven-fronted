@@ -139,7 +139,7 @@ export function WorkspaceIde({
 
     return (
         <div
-            className="flex h-full w-full min-w-0 overflow-hidden bg-[#0d1117] text-gray-200"
+            className="flex h-full w-full min-h-0 min-w-0 flex-1 overflow-hidden bg-surface text-on-surface select-none"
             style={
                 isResizing
                     ? { userSelect: 'none', cursor: 'inherit' }
@@ -148,35 +148,35 @@ export function WorkspaceIde({
         >
             {/* Left Sidebar (file tree / search / git / debug) */}
             <aside
-                className="flex h-full shrink-0 flex-col overflow-hidden bg-[#161b22]"
+                className="flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-surface-container-low border-r border-outline-variant/30"
                 style={{ width: sidebar.size }}
             >
-                {/* Only the file tree exists today; other panels were placeholders. */}
+                {/* File explorer panel */}
                 <FileExplorerPanel
-                        entries={files.entries}
-                        activePath={editor.activePath}
-                        isRefreshing={files.isRefreshing}
-                        onSelectFile={editor.selectFile}
-                        onRefresh={() => {
-                            void files.refreshFiles();
-                        }}
-                        onCreateFile={async (path) => {
-                            const created = await files.createFile({
-                                path,
-                                content: '',
-                            });
+                    entries={files.entries}
+                    activePath={editor.activePath}
+                    isRefreshing={files.isRefreshing}
+                    onSelectFile={editor.selectFile}
+                    onRefresh={() => {
+                        void files.refreshFiles();
+                    }}
+                    onCreateFile={async (path) => {
+                        const created = await files.createFile({
+                            path,
+                            content: '',
+                        });
 
-                            editor.selectFile(created.path);
-                        }}
-                        onCreateDirectory={async (path) => {
-                            await files.createDirectory({
-                                path,
-                            });
-                        }}
-                        onDelete={async (path) => {
-                            await files.deleteFile(path);
-                        }}
-                    />
+                        editor.selectFile(created.path);
+                    }}
+                    onCreateDirectory={async (path) => {
+                        await files.createDirectory({
+                            path,
+                        });
+                    }}
+                    onDelete={async (path) => {
+                        await files.deleteFile(path);
+                    }}
+                />
 
                 {runtime.devnet}
             </aside>
@@ -188,10 +188,15 @@ export function WorkspaceIde({
             />
 
             {/* Main IDE (editor + terminal) */}
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="flex min-w-0 flex-1 h-full min-h-0 flex-col overflow-hidden bg-surface">
                 {/* Editor container with relative positioning for terminal overlay */}
                 <div className="relative flex-1 min-h-0 overflow-hidden">
-                    <div className="absolute inset-0">
+                    <div
+                        className="absolute inset-x-0 top-0"
+                        style={{
+                            bottom: terminalVisible ? `${terminal.size}px` : '28px',
+                        }}
+                    >
                         <EditorPanel
                             file={editor.activeFile}
                             content={editor.content}
@@ -209,7 +214,7 @@ export function WorkspaceIde({
                     {terminalVisible && (
                         <>
                             <div
-                                className="absolute bottom-0 left-0 right-0 overflow-hidden bg-[#0d1117] border-t border-[#30363d]"
+                                className="absolute bottom-0 left-0 right-0 overflow-hidden bg-surface-container-lowest border-t border-outline-variant/30"
                                 style={{ height: terminal.size }}
                             >
                                 {runtime.ready ? (
@@ -220,7 +225,7 @@ export function WorkspaceIde({
                                         />
                                     </AssistantBridgeContext.Provider>
                                 ) : (
-                                    <div className="flex h-full items-center justify-center text-[12.5px] text-gray-500">
+                                    <div className="flex h-full items-center justify-center text-[11.5px] text-on-surface-variant font-mono">
                                         The terminal, build and tests connect when the workspace is running.
                                     </div>
                                 )}
@@ -241,13 +246,14 @@ export function WorkspaceIde({
 
                     {/* Terminal toggle button */}
                     {!terminalVisible && (
-                        <div className="absolute bottom-0 left-0 right-0 flex h-8 items-center border-t border-[#30363d] bg-[#0d1117] px-3">
+                        <div className="absolute bottom-0 left-0 right-0 flex h-7 items-center border-t border-outline-variant/30 bg-surface-container px-3">
                             <button
                                 type="button"
                                 onClick={() => setTerminalVisible(true)}
-                                className="text-[11px] font-medium uppercase tracking-wide text-gray-500 transition hover:text-gray-200"
+                                className="text-[10.5px] font-mono font-medium uppercase tracking-wider text-on-surface-variant transition hover:text-primary flex items-center gap-1.5"
                             >
-                                Open Terminal
+                                <span className="material-symbols-outlined text-[14px]">terminal</span>
+                                <span>Open Terminal &amp; Panels</span>
                             </button>
                         </div>
                     )}
@@ -259,14 +265,14 @@ export function WorkspaceIde({
                 <button
                     type="button"
                     onClick={() => setAiPanelVisible(!aiPanelVisible)}
-                    className="absolute z-30 -translate-x-1/2 rounded-md bg-[#161b22] p-1.5 text-gray-400 hover:bg-[#21262d] hover:text-gray-200 border border-[#30363d]"
+                    className="absolute z-30 -translate-x-1/2 rounded bg-surface-container-high p-1 text-on-surface-variant hover:bg-surface-container-highest hover:text-primary border border-outline-variant/40 shadow-sm"
                     style={{ left: aiPanelVisible ? '-8px' : '4px' }}
-                    title={aiPanelVisible ? 'Collapse AI Panel' : 'Expand AI Panel'}
+                    title={aiPanelVisible ? 'Collapse AI Assistant' : 'Expand AI Assistant'}
                 >
                     {aiPanelVisible ? (
-                        <PanelRightClose className="h-4 w-4" />
+                        <PanelRightClose className="h-3.5 w-3.5" />
                     ) : (
-                        <PanelRightOpen className="h-4 w-4" />
+                        <PanelRightOpen className="h-3.5 w-3.5" />
                     )}
                 </button>
 
@@ -282,7 +288,7 @@ export function WorkspaceIde({
             {/* AI Assistant */}
             {aiPanelVisible && (
                 <aside
-                    className="flex h-full shrink-0 flex-col overflow-hidden border-l border-[#30363d] bg-[#161b22]"
+                    className="flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-outline-variant/30 bg-surface-container"
                     style={{ width: aiPanel.size }}
                 >
                     <AIPanel

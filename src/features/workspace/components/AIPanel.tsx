@@ -249,30 +249,30 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
     // ------------------------------------------------------------------ render
 
     const header = (
-        <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#30363d] px-3">
+        <div className="flex h-8 shrink-0 items-center justify-between border-b border-outline-variant/30 bg-surface-container px-3">
             <div className="flex min-w-0 items-center gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded bg-[#d97757]/15 text-[#e8a283]">
-                    <Sparkles className="h-3 w-3" />
+                <span className="flex h-4 w-4 items-center justify-center rounded bg-primary/15 text-primary">
+                    <Sparkles className="h-2.5 w-2.5" />
                 </span>
-                <span className="text-[13px] font-semibold text-gray-100">Claude</span>
+                <span className="font-mono text-[10.5px] font-semibold text-on-surface uppercase tracking-wider">Assistant</span>
 
                 {status.data?.enabled && activeModel && (
                     <div className="relative">
                         <button
                             type="button"
                             onClick={() => setPickerOpen((open) => !open)}
-                            className="flex h-6 items-center gap-1 rounded px-1.5 text-[11.5px] text-gray-400 hover:bg-[#21262d] hover:text-gray-200"
+                            className="flex h-5 items-center gap-1 rounded px-1.5 font-mono text-[10px] text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                             aria-haspopup="listbox"
                             aria-expanded={pickerOpen}
                         >
                             {activeModel.name}
-                            <ChevronDown className="h-3 w-3" />
+                            <ChevronDown className="h-2.5 w-2.5" />
                         </button>
 
                         {pickerOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setPickerOpen(false)} />
-                                <div role="listbox" className="absolute left-0 top-7 z-50 w-60 overflow-hidden rounded-md border border-[#30363d] bg-[#161b22] py-1 shadow-xl">
+                                <div role="listbox" className="absolute left-0 top-6 z-50 w-56 overflow-hidden rounded border border-outline-variant/40 bg-surface-container-high py-1 shadow-2xl">
                                     {models.map((m) => (
                                         <button
                                             key={m.id}
@@ -288,12 +288,12 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
                                                 }
                                                 setPickerOpen(false);
                                             }}
-                                            className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-[#21262d]"
+                                            className="flex w-full items-start gap-2 px-2.5 py-1.5 text-left font-mono hover:bg-surface-container"
                                         >
-                                            <Check className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${m.id === activeModel.id ? 'text-[#58a6ff]' : 'text-transparent'}`} />
+                                            <Check className={`mt-0.5 h-3 w-3 shrink-0 ${m.id === activeModel.id ? 'text-primary' : 'text-transparent'}`} />
                                             <span>
-                                                <span className="block text-[12.5px] text-gray-100">{m.name}</span>
-                                                {m.description && <span className="block text-[11px] text-gray-500">{m.description}</span>}
+                                                <span className="block text-[11px] text-on-surface">{m.name}</span>
+                                                {m.description && <span className="block text-[9.5px] text-on-surface-variant/70">{m.description}</span>}
                                             </span>
                                         </button>
                                     ))}
@@ -304,16 +304,16 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
                 )}
             </div>
 
-            <div className="flex items-center">
+            <div className="flex items-center gap-0.5">
                 <button
                     type="button"
                     title="New chat"
                     aria-label="New chat"
                     disabled={busy || messages.length === 0}
                     onClick={() => setMessages([])}
-                    className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-[#21262d] hover:text-gray-200 disabled:opacity-40"
+                    className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
                 >
-                    <SquarePen className="h-3.5 w-3.5" />
+                    <SquarePen className="h-3 w-3" />
                 </button>
                 {onCollapse && (
                     <button
@@ -321,9 +321,9 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
                         title="Hide panel"
                         aria-label="Hide panel"
                         onClick={onCollapse}
-                        className="flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-[#21262d] hover:text-gray-200"
+                        className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                     >
-                        <PanelRightClose className="h-3.5 w-3.5" />
+                        <PanelRightClose className="h-3 w-3" />
                     </button>
                 )}
             </div>
@@ -332,11 +332,11 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
 
     if (status.isLoading) {
         return (
-            <div className="flex h-full flex-col">
+            <div className="flex h-full flex-col bg-surface-container-low font-mono">
                 {header}
-                <div className="flex-1 space-y-3 p-4">
-                    <div className="h-3 w-2/3 animate-pulse rounded bg-[#21262d]" />
-                    <div className="h-3 w-1/2 animate-pulse rounded bg-[#21262d]" />
+                <div className="flex-1 space-y-2.5 p-3">
+                    <div className="h-2.5 w-2/3 animate-pulse rounded bg-surface-container" />
+                    <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-container" />
                 </div>
             </div>
         );
@@ -344,23 +344,21 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
 
     if (status.isError || !status.data?.enabled) {
         return (
-            <div className="flex h-full flex-col">
+            <div className="flex h-full flex-col bg-surface-container-low font-mono">
                 {header}
-                <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#30363d] bg-[#0d1117]">
-                        {status.isError ? <AlertTriangle className="h-4.5 w-4.5 text-amber-400" /> : <KeyRound className="h-4.5 w-4.5 text-gray-300" />}
+                <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-outline-variant/30 bg-surface-container">
+                        {status.isError ? <AlertTriangle className="h-4 w-4 text-amber-400" /> : <KeyRound className="h-4 w-4 text-on-surface-variant" />}
                     </div>
-                    <p className="mt-4 text-[13.5px] font-medium text-gray-100">
-                        {status.isError ? 'Couldn’t reach the assistant' : 'Claude isn’t set up yet'}
+                    <p className="mt-3 text-[11.5px] font-medium text-on-surface">
+                        {status.isError ? 'Unable to reach assistant' : 'Assistant requires API key'}
                     </p>
-                    <p className="mt-1.5 text-[12.5px] leading-[1.6] text-gray-400">
+                    <p className="mt-1 text-[10.5px] leading-relaxed text-on-surface-variant">
                         {status.isError ? (
-                            'Check that the API gateway is running, then try again.'
+                            'Verify the backend server is running and try again.'
                         ) : (
                             <>
-                                Add <code className="rounded bg-[#0d1117] px-1 font-mono text-[11.5px] text-gray-200">ANTHROPIC_API_KEY</code> to{' '}
-                                <code className="rounded bg-[#0d1117] px-1 font-mono text-[11.5px] text-gray-200">backend/.env</code> and restart the
-                                gateway.
+                                Set <code className="rounded bg-surface px-1 font-mono text-[10px] text-primary">ANTHROPIC_API_KEY</code> or Gemini in environment.
                             </>
                         )}
                     </p>
@@ -368,9 +366,9 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
                         <button
                             type="button"
                             onClick={() => void status.refetch()}
-                            className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-[#30363d] px-3 py-1.5 text-[12.5px] text-gray-200 hover:bg-[#21262d]"
+                            className="mt-3 inline-flex items-center gap-1 rounded border border-outline-variant/30 px-2.5 py-1 text-[10.5px] text-on-surface hover:bg-surface-container"
                         >
-                            <RotateCw className="h-3.5 w-3.5" /> Retry
+                            <RotateCw className="h-3 w-3" /> Retry
                         </button>
                     )}
                 </div>
@@ -379,24 +377,23 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
     }
 
     return (
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-full min-h-0 flex-col bg-surface-container-low font-mono">
             {header}
 
-            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
                 {messages.length === 0 ? (
-                    <div className="px-1">
-                        <p className="text-[13.5px] font-medium text-gray-100">Ask about your contracts</p>
-                        <p className="mt-1 text-[12.5px] leading-[1.6] text-gray-400">
-                            Claude sees the open file and your project’s file list. Use “Ask Claude” on a failed build or test to explain
-                            the error.
+                    <div className="px-1 text-[10.5px]">
+                        <p className="font-medium text-on-surface">Contract Assistant</p>
+                        <p className="mt-1 leading-relaxed text-on-surface-variant">
+                            Ask questions regarding smart contract architecture, cycle optimizations, or test harnesses.
                         </p>
-                        <div className="mt-4 space-y-1.5">
+                        <div className="mt-3 space-y-1">
                             {suggestions.map((s) => (
                                 <button
                                     key={s}
                                     type="button"
                                     onClick={() => void send(s)}
-                                    className="block w-full rounded-md border border-[#30363d] bg-[#0d1117] px-3 py-2 text-left text-[12.5px] text-gray-300 transition-colors hover:border-[#484f58] hover:text-gray-100"
+                                    className="block w-full rounded border border-outline-variant/30 bg-surface px-2.5 py-1.5 text-left text-[10.5px] text-on-surface-variant transition-colors hover:border-secondary hover:text-on-surface"
                                 >
                                     {s}
                                 </button>
@@ -404,23 +401,23 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-5">
+                    <div className="space-y-3">
                         {messages.map((message) =>
                             message.role === 'user' ? (
                                 <div key={message.id} className="flex flex-col items-end gap-1">
-                                    <div className="max-w-[92%] whitespace-pre-wrap break-words rounded-lg bg-[#21262d] px-3 py-2 text-[13px] leading-[1.55] text-gray-100">
+                                    <div className="max-w-[94%] whitespace-pre-wrap break-words rounded bg-surface-container-high px-2.5 py-1.5 text-[11px] leading-relaxed text-on-surface">
                                         {message.content}
                                     </div>
                                     {(message.context?.file || message.context?.output) && (
-                                        <div className="flex max-w-[92%] flex-wrap justify-end gap-1">
+                                        <div className="flex max-w-[94%] flex-wrap justify-end gap-1 text-[9.5px]">
                                             {message.context.output && (
-                                                <span className="inline-flex items-center gap-1 rounded border border-[#30363d] px-1.5 py-0.5 text-[10.5px] text-gray-400">
-                                                    <Terminal className="h-3 w-3" /> {OUTPUT_LABEL[message.context.output]}
+                                                <span className="inline-flex items-center gap-1 rounded border border-outline-variant/30 px-1.5 py-0.5 text-on-surface-variant">
+                                                    <Terminal className="h-2.5 w-2.5" /> {OUTPUT_LABEL[message.context.output]}
                                                 </span>
                                             )}
                                             {message.context.file && (
-                                                <span className="inline-flex max-w-full items-center gap-1 truncate rounded border border-[#30363d] px-1.5 py-0.5 font-mono text-[10.5px] text-gray-400">
-                                                    <FileCode className="h-3 w-3 shrink-0" />
+                                                <span className="inline-flex max-w-full items-center gap-1 truncate rounded border border-outline-variant/30 px-1.5 py-0.5 text-on-surface-variant">
+                                                    <FileCode className="h-2.5 w-2.5 shrink-0" />
                                                     <span className="truncate">{message.context.file.split('/').pop()}</span>
                                                     {message.context.selection && ' · sel'}
                                                 </span>
@@ -429,29 +426,29 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
                                     )}
                                 </div>
                             ) : (
-                                <div key={message.id} className="min-w-0">
+                                <div key={message.id} className="min-w-0 text-[11px]">
                                     {message.content ? (
                                         <Markdown text={message.content} onInsertCode={onInsertCode} />
                                     ) : message.streaming ? (
-                                        <div className="flex items-center gap-1.5 py-1 text-[12.5px] text-gray-500">
-                                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#e8a283]" />
+                                        <div className="flex items-center gap-1.5 py-1 text-[10.5px] text-on-surface-variant">
+                                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
                                             Thinking…
                                         </div>
                                     ) : null}
 
                                     {message.streaming && message.content && (
-                                        <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-gray-400" />
+                                        <span className="ml-0.5 inline-block h-3 w-1 translate-y-0.5 animate-pulse bg-primary" />
                                     )}
 
                                     {message.error && (
-                                        <div className="mt-2 flex items-start gap-2 rounded-md border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-[12.5px] text-rose-200">
-                                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                        <div className="mt-1.5 flex items-start gap-1.5 rounded border border-error/30 bg-error/10 p-2 text-[10.5px] text-error">
+                                            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                                             <div className="min-w-0 flex-1">
                                                 {message.error}
                                                 <button
                                                     type="button"
                                                     onClick={() => retry(message.id)}
-                                                    className="ml-2 font-medium text-rose-100 underline-offset-2 hover:underline"
+                                                    className="ml-2 font-medium underline underline-offset-2 hover:opacity-80"
                                                 >
                                                     Retry
                                                 </button>
@@ -466,33 +463,33 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
             </div>
 
             {/* ------------------------------------------------ Composer */}
-            <div className="shrink-0 border-t border-[#30363d] p-3">
-                <div className="rounded-lg border border-[#30363d] bg-[#0d1117] focus-within:border-[#58a6ff]/60">
+            <div className="shrink-0 border-t border-outline-variant/30 p-2 bg-surface-container">
+                <div className="rounded border border-outline-variant/30 bg-surface-container-lowest focus-within:border-primary">
                     <textarea
                         ref={inputRef}
                         value={input}
                         onChange={(event) => setInput(event.target.value)}
                         onKeyDown={onKeyDown}
                         rows={1}
-                        placeholder="Ask Claude…"
-                        aria-label="Message Claude"
-                        className="block max-h-[180px] w-full resize-none bg-transparent px-3 pt-2.5 text-[13px] leading-[1.5] text-gray-100 placeholder:text-gray-500 focus:outline-none"
+                        placeholder="Ask assistant…"
+                        aria-label="Message Assistant"
+                        className="block max-h-[140px] w-full resize-none bg-transparent px-2.5 pt-2 text-[11px] leading-relaxed text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
                     />
-                    <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
+                    <div className="flex items-center justify-between gap-1.5 px-2 pb-1.5 pt-1">
                         {fileLabel ? (
                             <button
                                 type="button"
                                 onClick={() => setIncludeFile((v) => !v)}
-                                title={includeFile ? 'The open file is sent with your question. Click to leave it out.' : 'Click to send the open file with your question.'}
-                                className={`inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10.5px] transition-colors ${
-                                    includeFile ? 'bg-[#1f6feb]/15 text-[#79b8ff]' : 'text-gray-500 line-through hover:text-gray-400'
+                                title={includeFile ? 'Open file included' : 'Open file excluded'}
+                                className={`inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9.5px] transition-colors ${
+                                    includeFile ? 'bg-primary/10 text-primary' : 'text-on-surface-variant/50 line-through'
                                 }`}
                             >
-                                <FileCode className="h-3 w-3 shrink-0" />
+                                <FileCode className="h-2.5 w-2.5 shrink-0" />
                                 <span className="truncate">{fileLabel.split('/').pop()}</span>
                             </button>
                         ) : (
-                            <span className="text-[10.5px] text-gray-600">No file open</span>
+                            <span className="text-[9.5px] text-on-surface-variant/40">No file</span>
                         )}
 
                         {busy ? (
@@ -501,9 +498,9 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
                                 onClick={() => abortRef.current?.abort()}
                                 title="Stop"
                                 aria-label="Stop generating"
-                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#21262d] text-gray-200 hover:bg-[#30363d]"
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-surface-container-high text-on-surface hover:bg-surface-container-highest"
                             >
-                                <Square className="h-3 w-3 fill-current" />
+                                <Square className="h-2.5 w-2.5 fill-current" />
                             </button>
                         ) : (
                             <button
@@ -512,14 +509,13 @@ export function AIPanel({ workspaceId, onCollapse, getEditorContext, onInsertCod
                                 disabled={!input.trim()}
                                 title="Send (Enter)"
                                 aria-label="Send"
-                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#238636] text-white transition-colors hover:bg-[#2ea043] disabled:bg-[#21262d] disabled:text-gray-500"
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary text-on-primary transition-colors hover:bg-primary-fixed disabled:bg-surface-container-high disabled:text-on-surface-variant/40"
                             >
-                                <ArrowUp className="h-3.5 w-3.5" />
+                                <ArrowUp className="h-3 w-3" />
                             </button>
                         )}
                     </div>
                 </div>
-                <p className="mt-1.5 px-1 text-[10.5px] text-gray-600">Claude can make mistakes. Check code before you deploy it.</p>
             </div>
         </div>
     );

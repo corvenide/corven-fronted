@@ -1,6 +1,7 @@
+// src/features/workspace/components/TestsPanel.tsx
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
     Ban,
     CheckCircle2,
@@ -17,7 +18,6 @@ import {
     Folder,
     Check,
     RefreshCw,
-    File,
 } from 'lucide-react';
 
 import { AskClaudeButton } from '../../ai/components/AskClaudeButton';
@@ -57,19 +57,16 @@ export function TestsPanel({ workspaceId }: TestsPanelProps) {
     const directories = useMemo(() => {
         if (!files.entries || files.entries.length === 0) return [];
 
-        // Filter only directories and get unique root directories
         const dirSet = new Set<string>();
         const result: { name: string; path: string; count: number }[] = [];
 
         files.entries.forEach(entry => {
             if (entry.type === 'directory') {
-                // Get the first segment of the path (root directory)
                 const pathParts = entry.path.split('/');
                 const rootDir = pathParts[0];
 
                 if (rootDir && !dirSet.has(rootDir)) {
                     dirSet.add(rootDir);
-                    // Count items in this directory
                     const itemCount = files.entries.filter(e =>
                         e.path.startsWith(rootDir + '/') || e.path === rootDir
                     ).length;
@@ -83,7 +80,7 @@ export function TestsPanel({ workspaceId }: TestsPanelProps) {
             }
         });
 
-        return result.slice(0, 10); // Show first 10 directories
+        return result.slice(0, 10);
     }, [files.entries]);
 
     const handleProjectSelect = (project: string) => {
@@ -97,52 +94,53 @@ export function TestsPanel({ workspaceId }: TestsPanelProps) {
     };
 
     const getProjectIcon = (project: string) => {
-        if (project === '.') return <Folder className="h-3.5 w-3.5 text-[#58a6ff]" />;
-        return <FolderOpen className="h-3.5 w-3.5 text-[#58a6ff]" />;
+        if (project === '.') return <Folder className="h-3 w-3 text-secondary" />;
+        return <FolderOpen className="h-3 w-3 text-secondary" />;
     };
 
     return (
-        <section className="flex h-full min-h-0 flex-col bg-[#0d1117]">
-            <header className="flex h-10 shrink-0 items-center justify-between border-b border-[#30363d] px-3">
-                <div className="flex items-center gap-2">
-                    <FlaskConical className="h-4 w-4 text-[#58a6ff]" />
-                    <span className="text-xs font-semibold text-gray-200">
-                        Workspace Tests
+        <section className="flex h-full min-h-0 flex-col bg-surface-container-lowest">
+            {/* Header */}
+            <header className="flex h-8 shrink-0 items-center justify-between border-b border-outline-variant/30 bg-surface-container px-3">
+                <div className="flex items-center gap-2 font-mono text-[10.5px]">
+                    <FlaskConical className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-semibold uppercase tracking-wider text-on-surface">
+                        Tests
                     </span>
                     {tests.isRunning && (
-                        <span className="flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-300">
-                            <LoaderCircle className="h-3 w-3 animate-spin" />
-                            Running
+                        <span className="flex items-center gap-1 text-[10px] text-secondary">
+                            <span className="text-on-surface-variant/40">·</span>
+                            <LoaderCircle className="h-2.5 w-2.5 animate-spin" />
+                            <span>Running</span>
                         </span>
                     )}
-                    {/* Show project count badge */}
                     {tests.projects.length > 1 && !tests.loadingProjects && (
-                        <span className="rounded-full bg-[#21262d] px-2 py-0.5 text-[9px] text-gray-400">
-                            {tests.projects.length - 1} projects
+                        <span className="text-[10px] text-on-surface-variant">
+                            <span className="text-on-surface-variant/40">·</span> {tests.projects.length - 1} subproject{tests.projects.length - 1 !== 1 ? 's' : ''}
                         </span>
                     )}
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                     {tests.isRunning ? (
                         <button
                             type="button"
                             onClick={tests.cancelTests}
-                            className="flex items-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300 transition hover:bg-red-500/20"
+                            className="flex items-center gap-1 rounded border border-error/30 bg-error/10 px-2 py-0.5 text-[10.5px] font-mono text-error transition hover:bg-error/20"
                         >
-                            <Ban className="h-3.5 w-3.5" />
+                            <Ban className="h-3 w-3" />
                             Stop
                         </button>
                     ) : (
                         <button
                             type="button"
                             onClick={tests.runTests}
-                            className="flex items-center gap-1.5 rounded bg-[#238636] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-[#2ea043]"
+                            className="flex items-center gap-1 rounded bg-primary px-2.5 py-0.5 text-[10.5px] font-mono font-medium text-on-primary transition hover:bg-primary-fixed"
                         >
                             {hasResults ? (
-                                <RotateCcw className="h-3.5 w-3.5" />
+                                <RotateCcw className="h-3 w-3" />
                             ) : (
-                                <Play className="h-3.5 w-3.5 fill-current" />
+                                <Play className="h-3 w-3 fill-current" />
                             )}
                             {hasResults ? 'Run Again' : 'Run Tests'}
                         </button>
@@ -153,145 +151,95 @@ export function TestsPanel({ workspaceId }: TestsPanelProps) {
                         onClick={tests.clearResults}
                         disabled={tests.isRunning || !hasResults}
                         title="Clear test results"
-                        className="rounded p-1.5 text-gray-500 transition hover:bg-[#21262d] hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded p-1 text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3 w-3" />
                     </button>
                 </div>
             </header>
 
-            {/* ─── Project selector dropdown ─── */}
-            <div className="flex shrink-0 items-center gap-2 border-b border-[#30363d] px-3 py-1.5">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
-                    Project:
-                </span>
-                <div className="relative flex-1" ref={dropdownRef}>
-                    <button
-                        type="button"
-                        onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
-                        className="flex w-full items-center justify-between rounded border border-[#30363d] bg-[#0d1117] px-2 py-0.5 text-xs text-gray-200 transition hover:border-[#58a6ff] focus:outline-none focus:ring-1 focus:ring-[#58a6ff]"
-                        disabled={tests.loadingProjects}
-                    >
-                        <span className="flex items-center gap-1.5">
+            {/* Project Selector Bar */}
+            <div className="flex shrink-0 items-center justify-between border-b border-outline-variant/20 bg-surface-container/60 px-3 py-1 font-mono text-[10.5px]">
+                <div className="flex items-center gap-1.5" ref={dropdownRef}>
+                    <span className="text-[9.5px] uppercase tracking-wider text-on-surface-variant/70">
+                        Project:
+                    </span>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
+                            className="flex items-center gap-1.5 rounded border border-outline-variant/30 bg-surface px-2 py-0.5 text-on-surface transition hover:border-secondary focus:outline-none"
+                            disabled={tests.loadingProjects}
+                        >
                             {getProjectIcon(tests.projectPath)}
-                            <span className="truncate">
+                            <span className="max-w-[160px] truncate">
                                 {getProjectDisplayName(tests.projectPath)}
                             </span>
                             {tests.loadingProjects && (
-                                <LoaderCircle className="ml-1 h-3 w-3 animate-spin text-gray-500" />
+                                <LoaderCircle className="h-2.5 w-2.5 animate-spin text-on-surface-variant" />
                             )}
-                        </span>
-                        <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform duration-200 ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
-                    </button>
+                            <ChevronDown className={`h-3 w-3 text-on-surface-variant transition-transform ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
 
-                    {isProjectDropdownOpen && (
-                        <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-60 overflow-y-auto rounded border border-[#30363d] bg-[#0d1117] py-1 shadow-xl">
-                            {tests.loadingProjects ? (
-                                <div className="flex items-center justify-center gap-2 px-3 py-4 text-xs text-gray-500">
-                                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                                    Loading projects...
-                                </div>
-                            ) : tests.projects.length === 0 ? (
-                                <div className="px-3 py-4 text-center text-xs text-gray-500">
-                                    <Folder className="mx-auto mb-1 h-8 w-8 text-gray-600" />
-                                    No projects found
-                                </div>
-                            ) : (
-                                <>
-                                    {/* Project list header */}
-                                    <div className="border-b border-[#21262d] px-3 py-1.5 text-[9px] uppercase tracking-wider text-gray-600">
-                                        {tests.projects.length - 1} project{tests.projects.length - 1 !== 1 ? 's' : ''} available
+                        {isProjectDropdownOpen && (
+                            <div className="absolute left-0 top-full z-20 mt-1 max-h-56 min-w-[200px] overflow-y-auto rounded border border-outline-variant/40 bg-surface-container-high py-1 shadow-2xl">
+                                {tests.loadingProjects ? (
+                                    <div className="flex items-center justify-center gap-1.5 px-3 py-3 text-[10.5px] text-on-surface-variant">
+                                        <LoaderCircle className="h-3 w-3 animate-spin" />
+                                        Loading projects...
                                     </div>
-
-                                    {tests.projects.map((project) => {
-                                        const isSelected = tests.projectPath === project;
+                                ) : tests.projects.length === 0 ? (
+                                    <div className="px-3 py-3 text-center text-[10.5px] text-on-surface-variant">
+                                        No projects found
+                                    </div>
+                                ) : (
+                                    directories.map((d: any) => {
+                                        const isSelected = tests.projectPath === d.name;
                                         return (
                                             <button
-                                                key={project}
+                                                key={d.name}
                                                 type="button"
-                                                onClick={() => handleProjectSelect(project)}
-                                                className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition ${isSelected
-                                                    ? 'bg-[#1c2333] text-[#58a6ff]'
-                                                    : 'text-gray-300 hover:bg-[#21262d]'
+                                                onClick={() => handleProjectSelect(d.path)}
+                                                className={`flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[10.5px] font-mono transition text-left ${isSelected
+                                                    ? 'bg-primary/10 text-primary'
+                                                    : 'text-on-surface hover:bg-surface-container'
                                                     }`}
                                             >
-                                                {getProjectIcon(project)}
-                                                <span className="flex-1 truncate text-left">
-                                                    {getProjectDisplayName(project)}
+                                                {getProjectIcon(d.path)}
+                                                <span className="flex-1 truncate">
+                                                    {getProjectDisplayName(d.name)}
                                                 </span>
                                                 {isSelected && (
-                                                    <Check className="h-3.5 w-3.5 flex-shrink-0 text-[#58a6ff]" />
-                                                )}
-                                                {project === '.' && (
-                                                    <span className="rounded bg-[#21262d] px-1.5 py-0.5 text-[8px] text-gray-500">
-                                                        root
-                                                    </span>
+                                                    <Check className="h-3 w-3 text-primary shrink-0" />
                                                 )}
                                             </button>
                                         );
-                                    })}
-                                </>
-                            )}
-                        </div>
-                    )}
+                                    })
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Refresh button */}
-                <button
-                    type="button"
-                    onClick={tests.refreshProjects}
-                    disabled={tests.loadingProjects}
-                    className="rounded p-1 text-gray-500 transition hover:bg-[#21262d] hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
-                    title="Refresh project list"
-                >
-                    <RefreshCw className={`h-3.5 w-3.5 ${tests.loadingProjects ? 'animate-spin' : ''}`} />
-                </button>
-
-                {/* Current project indicator */}
-                {tests.projectPath !== '.' && (
-                    <span className="hidden rounded bg-[#1c2333] px-2 py-0.5 text-[9px] text-[#58a6ff] sm:inline-block">
-                        {tests.projectPath}
-                    </span>
-                )}
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={tests.refreshProjects}
+                        disabled={tests.loadingProjects}
+                        className="rounded p-1 text-on-surface-variant hover:text-on-surface disabled:opacity-40"
+                        title="Refresh projects"
+                    >
+                        <RefreshCw className={`h-3 w-3 ${tests.loadingProjects ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
             </div>
 
-            {/* ─── Workspace Directories ─── */}
-            <div className="flex shrink-0 items-center gap-2 border-b border-[#30363d] px-3 py-1.5">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
-                    Directories:
-                </span>
-                {files.isLoading ? (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <LoaderCircle className="h-3 w-3 animate-spin" />
-                        Loading...
-                    </div>
-                ) : directories.length === 0 ? (
-                    <span className="text-xs text-gray-500">No directories found</span>
-                ) : (
-                    <div className="flex flex-wrap items-center gap-1">
-                        {directories.map((dir) => (
-                            <button
-                                key={dir.path}
-                                type="button"
-                                onClick={() => handleProjectSelect(dir.path)}
-                                className="flex items-center gap-1 rounded bg-[#21262d] px-2 py-0.5 text-xs text-gray-300 transition hover:bg-[#30363d] hover:text-white"
-                                title={`${dir.count} items in ${dir.name}`}
-                            >
-                                <Folder className="h-3 w-3 text-[#58a6ff]" />
-                                <span>{dir.name}</span>
-                                <span className="text-[9px] text-gray-500">({dir.count})</span>
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* ─── Main content ─── */}
+            {/* Main content */}
             {!hasResults && !tests.isRunning ? (
                 <EmptyTestsState onRun={tests.runTests} />
             ) : (
-                <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,36%)_1fr]">
-                    <div className="min-h-0 overflow-y-auto border-r border-[#30363d]">
+                <div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,32%)_1fr]">
+                    <div className="min-h-0 overflow-y-auto border-r border-outline-variant/30">
                         <TestSummary
                             status={tests.status}
                             passed={tests.run.summary.passed}
@@ -300,30 +248,30 @@ export function TestsPanel({ workspaceId }: TestsPanelProps) {
                             durationMs={tests.run.summary.durationMs}
                         />
 
-                        <div className="border-t border-[#30363d]">
+                        <div className="border-t border-outline-variant/20">
                             {tests.run.tests.length === 0 ? (
-                                <div className="px-4 py-6 text-center text-xs text-gray-600">
+                                <div className="px-3 py-5 text-center font-mono text-[10.5px] text-on-surface-variant/60">
                                     Waiting for test results...
                                 </div>
                             ) : (
                                 tests.run.tests.map((test) => (
                                     <div
                                         key={test.id}
-                                        className="flex items-start gap-2 border-b border-[#21262d] px-3 py-2.5"
+                                        className="flex items-start gap-2 border-b border-outline-variant/15 px-3 py-2 font-mono"
                                     >
                                         {test.status === 'passed' ? (
-                                            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                                            <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
                                         ) : test.status === 'failed' ? (
-                                            <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
+                                            <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-error" />
                                         ) : (
-                                            <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-500" />
+                                            <Circle className="mt-0.5 h-3 w-3 shrink-0 text-on-surface-variant" />
                                         )}
-                                        <div className="min-w-0">
-                                            <p className="break-all font-mono text-[11px] text-gray-300">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="break-all text-[10.5px] text-on-surface">
                                                 {test.name}
                                             </p>
                                             {test.error && (
-                                                <p className="mt-1 text-[10px] text-red-400">
+                                                <p className="mt-0.5 text-[9.5px] text-error">
                                                     {test.error}
                                                 </p>
                                             )}
@@ -334,16 +282,15 @@ export function TestsPanel({ workspaceId }: TestsPanelProps) {
                         </div>
                     </div>
 
-                    <div className="flex min-h-0 flex-col">
-                        <div className="flex h-8 shrink-0 items-center justify-between border-b border-[#30363d] px-3">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                    <div className="flex min-h-0 flex-col bg-surface-container-lowest">
+                        <div className="flex h-7 shrink-0 items-center justify-between border-b border-outline-variant/20 bg-surface-container/40 px-3">
+                            <span className="font-mono text-[9.5px] font-semibold uppercase tracking-wider text-on-surface-variant">
                                 Test Output
                             </span>
-                            <div className="flex items-center gap-2">
-                                {/* Show current project in output header */}
+                            <div className="flex items-center gap-2 font-mono text-[9.5px] text-on-surface-variant">
                                 {tests.projectPath !== '.' && (
-                                    <span className="flex items-center gap-1 rounded bg-[#1c2333] px-2 py-0.5 text-[9px] text-[#58a6ff]">
-                                        <FolderOpen className="h-3 w-3" />
+                                    <span className="flex items-center gap-1 text-secondary">
+                                        <FolderOpen className="h-2.5 w-2.5" />
                                         {tests.projectPath}
                                     </span>
                                 )}
@@ -358,12 +305,10 @@ export function TestsPanel({ workspaceId }: TestsPanelProps) {
                                         output={tests.run.output}
                                     />
                                 )}
-                                <span className="font-mono text-[10px] text-gray-600">
-                                    make test
-                                </span>
+                                <span>make test</span>
                             </div>
                         </div>
-                        <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-5 text-gray-300">
+                        <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-2.5 font-mono text-[10.5px] leading-relaxed text-on-surface">
                             {tests.run.output || 'Preparing test runner...'}
                         </pre>
                     </div>
@@ -385,54 +330,46 @@ interface TestSummaryProps {
 
 function TestSummary({ status, passed, failed, ignored, durationMs }: TestSummaryProps) {
     return (
-        <div className="grid grid-cols-2 gap-2 p-3">
-            <SummaryCard label="Passed" value={passed} icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />} />
-            <SummaryCard label="Failed" value={failed} icon={<XCircle className="h-3.5 w-3.5 text-red-400" />} />
-            <SummaryCard label="Ignored" value={ignored} icon={<Circle className="h-3.5 w-3.5 text-gray-500" />} />
-            <SummaryCard label="Duration" value={formatDuration(durationMs)} icon={<Clock3 className="h-3.5 w-3.5 text-blue-400" />} />
-            <div className="col-span-2 rounded border border-[#30363d] bg-[#161b22] px-3 py-2">
-                <span className="text-[10px] uppercase tracking-wide text-gray-600">Status</span>
-                <p className="mt-1 text-xs font-medium capitalize text-gray-300">{status}</p>
+        <div className="p-2 space-y-1.5 font-mono text-[10.5px]">
+            <div className="grid grid-cols-3 gap-1.5">
+                <div className="rounded border border-outline-variant/20 bg-surface-container p-1.5 text-center">
+                    <span className="text-[9px] uppercase tracking-wider text-on-surface-variant/70">Passed</span>
+                    <p className="mt-0.5 font-semibold text-primary">{passed}</p>
+                </div>
+                <div className="rounded border border-outline-variant/20 bg-surface-container p-1.5 text-center">
+                    <span className="text-[9px] uppercase tracking-wider text-on-surface-variant/70">Failed</span>
+                    <p className={`mt-0.5 font-semibold ${failed > 0 ? 'text-error' : 'text-on-surface'}`}>{failed}</p>
+                </div>
+                <div className="rounded border border-outline-variant/20 bg-surface-container p-1.5 text-center">
+                    <span className="text-[9px] uppercase tracking-wider text-on-surface-variant/70">Duration</span>
+                    <p className="mt-0.5 text-on-surface">{formatDuration(durationMs)}</p>
+                </div>
             </div>
-        </div>
-    );
-}
 
-interface SummaryCardProps {
-    label: string;
-    value: string | number;
-    icon: React.ReactNode;
-}
-
-function SummaryCard({ label, value, icon }: SummaryCardProps) {
-    return (
-        <div className="rounded border border-[#30363d] bg-[#161b22] px-3 py-2">
-            <div className="flex items-center gap-1.5">
-                {icon}
-                <span className="text-[10px] uppercase tracking-wide text-gray-600">{label}</span>
+            <div className="flex items-center justify-between rounded border border-outline-variant/20 bg-surface-container px-2.5 py-1.5">
+                <span className="text-[9.5px] uppercase tracking-wider text-on-surface-variant/70">Status</span>
+                <span className="capitalize text-secondary font-medium">{status}</span>
             </div>
-            <p className="mt-1 font-mono text-sm font-semibold text-gray-200">{value}</p>
         </div>
     );
 }
 
 function EmptyTestsState({ onRun }: { onRun: () => void }) {
     return (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#30363d] bg-[#161b22]">
-                <FlaskConical className="h-5 w-5 text-[#58a6ff]" />
+        <div className="flex flex-1 flex-col items-center justify-center p-6 text-center font-mono">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-outline-variant/30 bg-surface-container">
+                <FlaskConical className="h-4 w-4 text-primary" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-gray-200">Test your CKB contracts</h3>
-            <p className="mt-1 max-w-sm text-xs leading-5 text-gray-500">
-                Run the workspace test suite without entering commands in the terminal.
-                Results and logs will appear here in real time.
+            <h3 className="mt-3 text-[12px] font-semibold text-on-surface">Test CKB Contracts</h3>
+            <p className="mt-1 max-w-xs text-[10.5px] leading-relaxed text-on-surface-variant">
+                Run contract unit and integration tests using ckb-testtool.
             </p>
             <button
                 type="button"
                 onClick={onRun}
-                className="mt-4 flex items-center gap-2 rounded bg-[#238636] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2ea043]"
+                className="mt-3 flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-[10.5px] font-medium text-on-primary transition hover:bg-primary-fixed"
             >
-                <Play className="h-3.5 w-3.5 fill-current" />
+                <Play className="h-3 w-3 fill-current" />
                 Run Tests
             </button>
         </div>

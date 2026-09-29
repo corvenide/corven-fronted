@@ -322,13 +322,13 @@ export function FileExplorerPanel({
     };
 
     return (
-        <div className="flex h-full flex-col">
-            <div className="flex h-11 items-center justify-between border-b border-[#30363d] bg-[#0d1117] px-3">
-                <span className="font-mono text-xs font-bold uppercase tracking-widest text-gray-400">
+        <div className="flex flex-1 min-h-0 h-full flex-col bg-surface-container-low overflow-hidden">
+            <div className="flex h-8 items-center justify-between border-b border-outline-variant/30 bg-surface-container px-3">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant">
                     Explorer
                 </span>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5">
                     <button
                         type="button"
                         title="New file"
@@ -337,9 +337,9 @@ export function FileExplorerPanel({
                             setError(null);
                             setCreatingType('file');
                         }}
-                        className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
                     >
-                        <Plus className="h-3.5 w-3.5" />
+                        <Plus className="h-3 w-3" />
                     </button>
 
                     <button
@@ -350,9 +350,9 @@ export function FileExplorerPanel({
                             setError(null);
                             setCreatingType('directory');
                         }}
-                        className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
                     >
-                        <FolderPlus className="h-3.5 w-3.5" />
+                        <FolderPlus className="h-3 w-3" />
                     </button>
 
                     <button
@@ -360,10 +360,10 @@ export function FileExplorerPanel({
                         title="Refresh"
                         onClick={onRefresh}
                         disabled={isRefreshing}
-                        className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-white disabled:opacity-40"
+                        className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-primary disabled:opacity-40 transition-colors"
                     >
                         <RefreshCw
-                            className={`h-3.5 w-3.5 ${isRefreshing
+                            className={`h-3 w-3 ${isRefreshing
                                 ? 'animate-spin'
                                 : ''
                                 }`}
@@ -373,12 +373,12 @@ export function FileExplorerPanel({
             </div>
 
             {error && (
-                <div className="border-b border-rose-500/20 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-400">
+                <div className="border-b border-error/30 bg-error/10 px-3 py-1.5 text-[10.5px] text-error font-mono">
                     {error}
                 </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-2">
+            <div className="flex-1 min-h-0 overflow-y-auto p-1.5">
                 {creatingType && (
                     <InlineCreateInput
                         depth={0}
@@ -393,8 +393,8 @@ export function FileExplorerPanel({
 
                 {tree.length === 0 &&
                     !creatingType && (
-                        <div className="px-3 py-5 text-center text-xs text-gray-600">
-                            No files in this workspace.
+                        <div className="px-3 py-6 text-center text-[10.5px] font-mono text-on-surface-variant/60">
+                            No files in workspace
                         </div>
                     )}
 
@@ -456,6 +456,9 @@ function FileTreeItem({
     const [isDeleting, setIsDeleting] =
         useState(false);
 
+    const [confirmingDelete, setConfirmingDelete] =
+        useState(false);
+
     const isDirectory =
         node.type === 'directory';
 
@@ -489,37 +492,31 @@ function FileTreeItem({
     };
 
     const handleDelete = async () => {
-        const confirmed = window.confirm(
-            `Delete "${node.path}"?`,
-        );
-
-        if (!confirmed) {
-            return;
-        }
-
         setIsDeleting(true);
 
         try {
             await onDelete(node.path);
         } finally {
             setIsDeleting(false);
+            setConfirmingDelete(false);
         }
     };
 
     return (
         <div>
             <div
-                className={`group flex items-center rounded text-xs ${activePath === node.path
-                    ? 'bg-[#1f6feb]/10 text-[#58a6ff]'
-                    : 'text-gray-400 hover:bg-gray-800/30 hover:text-gray-200'
-                    }`}
+                className={`group flex items-center rounded text-[11px] font-mono transition-colors ${
+                    activePath === node.path
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                }`}
                 style={{
                     paddingLeft: depth * 12,
                 }}
             >
                 <button
                     type="button"
-                    className="flex min-w-0 flex-1 items-center gap-1.5 py-1"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 py-1 px-1 text-left"
                     onClick={() => {
                         if (isDirectory) {
                             setExpanded(
@@ -533,21 +530,22 @@ function FileTreeItem({
                     {isDirectory ? (
                         <>
                             {expanded ? (
-                                <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                                <ChevronDown className="h-3 w-3 shrink-0 text-on-surface-variant" />
                             ) : (
-                                <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                                <ChevronRight className="h-3 w-3 shrink-0 text-on-surface-variant" />
                             )}
 
-                            <Folder className="h-3.5 w-3.5 shrink-0 text-[#58a6ff]" />
+                            <Folder className="h-3 w-3 shrink-0 text-secondary" />
                         </>
                     ) : (
                         <>
-                            <span className="w-3.5 shrink-0" />
+                            <span className="w-3 shrink-0" />
 
-                            <FileIcon className={`h-3.5 w-3.5 shrink-0 ${activePath === node.path
-                                ? 'text-[#58a6ff]'
-                                : 'text-gray-400'
-                                }`} />
+                            <FileIcon className={`h-3 w-3 shrink-0 ${
+                                activePath === node.path
+                                    ? 'text-primary'
+                                    : 'text-on-surface-variant'
+                            }`} />
                         </>
                     )}
 
@@ -556,50 +554,73 @@ function FileTreeItem({
                     </span>
                 </button>
 
-                {isDirectory && (
-                    <>
+                {confirmingDelete ? (
+                    <div className="flex items-center gap-1 pr-1 text-[10px]" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-error font-medium">Delete?</span>
                         <button
                             type="button"
-                            title="New file"
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                setExpanded(true);
-                                setCreatingType('file');
-                            }}
-                            className="hidden rounded p-1 text-gray-600 hover:text-white group-hover:block"
+                            disabled={isDeleting}
+                            onClick={() => void handleDelete()}
+                            className="px-1 py-0.5 rounded bg-error/20 text-error hover:bg-error/30"
                         >
-                            <Plus className="h-3 w-3" />
+                            Yes
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setConfirmingDelete(false)}
+                            className="px-1 py-0.5 rounded bg-surface-container-high text-on-surface-variant hover:text-on-surface"
+                        >
+                            No
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        {isDirectory && (
+                            <>
+                                <button
+                                    type="button"
+                                    title="New file"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setExpanded(true);
+                                        setCreatingType('file');
+                                    }}
+                                    className="hidden rounded p-0.5 text-on-surface-variant hover:text-primary group-hover:block"
+                                >
+                                    <Plus className="h-3 w-3" />
+                                </button>
+
+                                <button
+                                    type="button"
+                                    title="New folder"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setExpanded(true);
+                                        setCreatingType(
+                                            'directory',
+                                        );
+                                    }}
+                                    className="hidden rounded p-0.5 text-on-surface-variant hover:text-primary group-hover:block"
+                                >
+                                    <FolderPlus className="h-3 w-3" />
+                                </button>
+                            </>
+                        )}
 
                         <button
                             type="button"
-                            title="New folder"
+                            title="Delete"
+                            disabled={isDeleting}
                             onClick={(event) => {
                                 event.stopPropagation();
-                                setExpanded(true);
-                                setCreatingType(
-                                    'directory',
-                                );
+                                setConfirmingDelete(true);
                             }}
-                            className="hidden rounded p-1 text-gray-600 hover:text-white group-hover:block"
+                            className="mr-1 hidden rounded p-0.5 text-on-surface-variant hover:text-error disabled:opacity-40 group-hover:block"
                         >
-                            <FolderPlus className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3" />
                         </button>
                     </>
                 )}
-
-                <button
-                    type="button"
-                    title="Delete"
-                    disabled={isDeleting}
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        void handleDelete();
-                    }}
-                    className="mr-1 hidden rounded p-1 text-gray-600 hover:text-rose-400 disabled:opacity-40 group-hover:block"
-                >
-                    <Trash2 className="h-3 w-3" />
-                </button>
             </div>
 
             {isDirectory && expanded && (
@@ -801,9 +822,9 @@ function InlineCreateInput({
                 }}
             >
                 {type === 'directory' ? (
-                    <Folder className="h-3.5 w-3.5 shrink-0 text-[#58a6ff]" />
+                    <Folder className="h-3.5 w-3.5 shrink-0 text-secondary" />
                 ) : (
-                    <PreviewIcon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                    <PreviewIcon className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
                 )}
 
                 <input
@@ -830,7 +851,7 @@ function InlineCreateInput({
                             ? 'Folder name'
                             : 'File name'
                     }
-                    className="w-full min-w-0 rounded border border-[#1f6feb] bg-[#0d1117] px-1 py-0.5 text-xs text-gray-200 outline-none disabled:opacity-50"
+                    className="w-full min-w-0 rounded border border-primary/50 bg-surface-container-lowest px-1.5 py-0.5 text-[11px] font-mono text-on-surface outline-none focus:border-primary disabled:opacity-50"
                 />
             </div>
 

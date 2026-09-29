@@ -40,8 +40,8 @@ export function WorkspaceBottomPanel({
         );
 
     return (
-        <section className="flex h-full min-h-0 flex-col bg-[#0d1117]">
-            <header className="flex h-9 shrink-0 items-center justify-between border-b border-[#30363d] px-3">
+        <section className="flex h-full min-h-0 flex-col bg-surface-container-lowest">
+            <header className="flex h-8 shrink-0 items-center justify-between border-b border-outline-variant/30 bg-surface-container px-3">
                 <div className="flex h-full items-center gap-4">
                     <PanelTab
                         label="Terminal"
@@ -102,7 +102,7 @@ export function WorkspaceBottomPanel({
                     type="button"
                     onClick={onClose}
                     title="Close panel"
-                    className="rounded p-1 text-gray-500 transition hover:bg-[#21262d] hover:text-gray-200"
+                    className="rounded p-1 text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface"
                 >
                     <X className="h-3.5 w-3.5" />
                 </button>
@@ -157,10 +157,10 @@ function PanelTab({
             type="button"
             onClick={onClick}
             className={[
-                'flex h-full items-center gap-1.5 border-b px-1 text-[11px] font-medium uppercase tracking-wide transition',
+                'flex h-full items-center gap-1.5 border-b-2 px-1 text-[10.5px] font-mono font-medium uppercase tracking-wider transition-colors',
                 active
-                    ? 'border-[#58a6ff] text-gray-200'
-                    : 'border-transparent text-gray-500 hover:text-gray-300',
+                    ? 'border-primary text-primary font-semibold'
+                    : 'border-transparent text-on-surface-variant hover:text-on-surface',
             ].join(' ')}
         >
             {icon}

@@ -40,7 +40,11 @@ export default function AppLayout() {
     };
 
     return (
-        <div className="bg-surface font-body-md text-on-surface antialiased min-h-screen flex flex-col">
+        <div
+            className={`bg-surface font-body-md text-on-surface antialiased flex flex-col ${
+                inIde ? 'h-screen overflow-hidden' : 'min-h-screen'
+            }`}
+        >
             {/* Top Fixed Header (h-14) */}
             <header className="fixed top-0 left-0 right-0 h-14 z-50 bg-surface-container-lowest border-b border-outline-variant/30 flex items-center justify-between px-space-md">
                 <div className="flex items-center gap-space-lg">
@@ -59,20 +63,22 @@ export default function AppLayout() {
                     <nav className="hidden md:flex items-center gap-space-xs">
                         <Link
                             to="/dashboard"
-                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${isWorkspacesActive
+                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${
+                                isWorkspacesActive
                                     ? 'bg-surface-container text-on-surface font-medium rounded-lg border border-outline-variant/40'
                                     : 'rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
-                                }`}
+                            }`}
                         >
                             Workspaces
                         </Link>
 
                         <Link
                             to="/dashboard?tab=community"
-                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${isCommunityActive
+                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${
+                                isCommunityActive
                                     ? 'bg-surface-container text-on-surface font-medium rounded-lg border border-outline-variant/40'
                                     : 'rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
-                                }`}
+                            }`}
                         >
                             <span>Community</span>
                             <span className="px-1 py-0.2 rounded text-[10px] font-label-sm bg-surface-container-high text-secondary border border-outline-variant/30">
@@ -82,10 +88,11 @@ export default function AppLayout() {
 
                         <Link
                             to="/dashboard?tab=donate"
-                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${isDonateActive
+                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${
+                                isDonateActive
                                     ? 'bg-surface-container text-on-surface font-medium rounded-lg border border-outline-variant/40'
                                     : 'rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
-                                }`}
+                            }`}
                         >
                             <span>Donate</span>
                             <span className="px-1 py-0.2 rounded text-[10px] font-code-sm bg-primary/10 text-primary border border-primary/20">
@@ -147,9 +154,10 @@ export default function AppLayout() {
                         to="/dashboard"
                         title="Workspaces"
                         className={({ isActive }) =>
-                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isActive && !currentTab
-                                ? 'bg-surface-container text-primary border border-outline-variant/50'
-                                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                                isActive && !currentTab
+                                    ? 'bg-surface-container text-primary border border-outline-variant/50'
+                                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
                             }`
                         }
                     >
@@ -186,9 +194,10 @@ export default function AppLayout() {
                         to="/nodes"
                         title="Node & Network"
                         className={({ isActive }) =>
-                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isActive
-                                ? 'bg-surface-container text-primary border border-outline-variant/50'
-                                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                                isActive
+                                    ? 'bg-surface-container text-primary border border-outline-variant/50'
+                                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
                             }`
                         }
                     >
@@ -199,9 +208,10 @@ export default function AppLayout() {
                         to="/settings"
                         title="IDE Settings"
                         className={({ isActive }) =>
-                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isActive
-                                ? 'bg-surface-container text-primary border border-outline-variant/50'
-                                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                                isActive
+                                    ? 'bg-surface-container text-primary border border-outline-variant/50'
+                                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
                             }`
                         }
                     >
@@ -211,8 +221,14 @@ export default function AppLayout() {
             </aside>
 
             {/* Main content body */}
-            <div className="pl-14 flex-1 flex flex-col">
-                <main className={`w-full pt-14 bg-surface min-h-screen ${inIde ? 'overflow-hidden' : ''}`}>
+            <div className={`pl-14 flex-1 flex flex-col min-h-0 ${inIde ? 'h-full overflow-hidden' : ''}`}>
+                <main
+                    className={`w-full ${
+                        inIde
+                            ? 'pt-14 h-full flex-1 flex flex-col min-h-0 overflow-hidden bg-surface'
+                            : 'pt-14 bg-surface min-h-screen'
+                    }`}
+                >
                     <Outlet />
                 </main>
             </div>

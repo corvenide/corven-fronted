@@ -32,10 +32,7 @@ export function ProjectSelector({
                 setProjects(data.projects || []);
             } catch (error) {
                 console.error('Failed to fetch projects:', error);
-                // Fallback: use mock data based on your example
-                setProjects([
-                    { name: 'ckb-rust-script', path: 'ckb-rust-script' },
-                ]);
+                setProjects([]);
             } finally {
                 setLoading(false);
             }

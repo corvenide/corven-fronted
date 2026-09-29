@@ -3,6 +3,11 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { tokenStorage } from '../../../lib/token-storage';
 import { terminalServiceOrigin } from '../../../config/env';
+import {
+    cwdForCommand,
+    normalizeWorkspaceProjectPath,
+    parseProjectsList,
+} from '../utils/project-path';
 
 export interface BuildEntry {
     status: 'idle' | 'running' | 'success' | 'error' | 'cancelled';
@@ -89,8 +94,16 @@ export function useWorkspaceBuild(workspaceId: string): UseWorkspaceBuildResult 
     const [duration, setDuration] = useState<number | undefined>(undefined);
     const [error, setError] = useState<string | null>(null);
     const [buildTarget, setBuildTarget] = useState<string>('Default Build');
-    const [projectPath, setProjectPath] = useState<string>('.');
+    const [projectPath, setProjectPathState] = useState<string>('.');
     const [projects, setProjects] = useState<string[]>(['.']);
+    const projectPathRef = useRef(projectPath);
+    projectPathRef.current = projectPath;
+
+    const setProjectPath = useCallback((path: string) => {
+        const normalized = normalizeWorkspaceProjectPath(path);
+        projectPathRef.current = normalized;
+        setProjectPathState(normalized);
+    }, []);
     const [loadingProjects, setLoadingProjects] = useState(false);
 
     const socketRef = useRef<Socket | null>(null);
@@ -147,20 +160,13 @@ export function useWorkspaceBuild(workspaceId: string): UseWorkspaceBuildResult 
             setLoadingProjects(false);
             if (data && data.projects) {
                 console.log(`[Build] Received ${data.projects.length} projects:`, data.projects);
-                if (data.projects.length > 0) {
-                    const projectList = ['.', ...data.projects];
-                    setProjects(projectList);
-                    // If current projectPath is not in the list, reset to '.'
-                    setProjectPath((current) => {
-                        if (current !== '.' && !data.projects.includes(current)) {
-                            return '.';
-                        }
-                        return current;
-                    });
-                } else {
-                    console.log('[Build] No projects found, using default');
-                    setProjects(['.']);
-                }
+                const detected = parseProjectsList(data.projects);
+                setProjects(['.', ...detected]);
+                setProjectPathState((current) => {
+                    const normalized = normalizeWorkspaceProjectPath(current);
+                    projectPathRef.current = normalized;
+                    return normalized;
+                });
             } else {
                 console.warn('[Build] Invalid projects response:', data);
                 setProjects(['.']);
@@ -358,7 +364,8 @@ export function useWorkspaceBuild(workspaceId: string): UseWorkspaceBuildResult 
             return;
         }
 
-        const projectPathToUse = projectPath === '.' ? '' : projectPath;
+        const selectedPath = projectPathRef.current;
+        const projectPathToUse = cwdForCommand(selectedPath) ?? '';
         console.log(`[Build] Starting build for workspace ${workspaceId} with target ${buildTarget} at path ${projectPathToUse || 'root'}`);
 
         // Reset state
@@ -374,7 +381,7 @@ export function useWorkspaceBuild(workspaceId: string): UseWorkspaceBuildResult 
             status: 'running',
             output: '',
             timestamp: new Date().toISOString(),
-            projectPath: projectPath,
+            projectPath: selectedPath,
         };
 
         const buildId = crypto.randomUUID();
@@ -386,7 +393,7 @@ export function useWorkspaceBuild(workspaceId: string): UseWorkspaceBuildResult 
             cwd: projectPathToUse || undefined,
             buildId,
         });
-    }, [workspaceId, buildTarget, projectPath, isAuthenticated, status]);
+    }, [workspaceId, buildTarget, isAuthenticated, status]);
 
     const cancelBuild = useCallback(async () => {
         if (!buildIdRef.current) {

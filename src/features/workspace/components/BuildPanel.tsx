@@ -1,7 +1,7 @@
 // src/features/workspace/components/BuildPanel.tsx
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
     Hammer,
     Play,
@@ -35,22 +35,22 @@ function formatDuration(durationMs?: number): string {
 function getStatusIcon(status: 'idle' | 'running' | 'success' | 'error' | 'cancelled') {
     switch (status) {
         case 'running':
-            return <LoaderCircle className="h-3.5 w-3.5 animate-spin text-blue-400" />;
+            return <LoaderCircle className="h-3 w-3 animate-spin text-secondary" />;
         case 'success':
-            return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />;
+            return <CheckCircle2 className="h-3 w-3 text-primary" />;
         case 'error':
-            return <XCircle className="h-3.5 w-3.5 text-red-400" />;
+            return <XCircle className="h-3 w-3 text-error" />;
         case 'cancelled':
-            return <AlertCircle className="h-3.5 w-3.5 text-amber-400" />;
+            return <AlertCircle className="h-3 w-3 text-amber-400" />;
         default:
-            return <Hammer className="h-3.5 w-3.5 text-gray-500" />;
+            return <Hammer className="h-3 w-3 text-on-surface-variant" />;
     }
 }
 
 function getStatusText(status: 'idle' | 'running' | 'success' | 'error' | 'cancelled'): string {
     switch (status) {
         case 'running':
-            return 'Building...';
+            return 'Building';
         case 'success':
             return 'Build succeeded';
         case 'error':
@@ -65,15 +65,15 @@ function getStatusText(status: 'idle' | 'running' | 'success' | 'error' | 'cance
 function getStatusColor(status: 'idle' | 'running' | 'success' | 'error' | 'cancelled'): string {
     switch (status) {
         case 'running':
-            return 'text-blue-400';
+            return 'text-secondary';
         case 'success':
-            return 'text-emerald-400';
+            return 'text-primary';
         case 'error':
-            return 'text-red-400';
+            return 'text-error';
         case 'cancelled':
             return 'text-amber-400';
         default:
-            return 'text-gray-500';
+            return 'text-on-surface-variant';
     }
 }
 
@@ -100,7 +100,7 @@ export function BuildPanel({ workspaceId }: BuildPanelProps) {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const hasResults = build.history.length > 0 || build.currentOutput;
+    const hasResults = build.history.length > 0 || Boolean(build.currentOutput);
 
     const handleBuild = useCallback(() => {
         build.buildProject();
@@ -120,19 +120,16 @@ export function BuildPanel({ workspaceId }: BuildPanelProps) {
     const directories = useMemo(() => {
         if (!files.entries || files.entries.length === 0) return [];
 
-        // Filter only directories and get unique root directories
         const dirSet = new Set<string>();
         const result: { name: string; path: string; count: number }[] = [];
 
         files.entries.forEach(entry => {
             if (entry.type === 'directory') {
-                // Get the first segment of the path (root directory)
                 const pathParts = entry.path.split('/');
                 const rootDir = pathParts[0];
 
                 if (rootDir && !dirSet.has(rootDir)) {
                     dirSet.add(rootDir);
-                    // Count items in this directory
                     const itemCount = files.entries.filter(e =>
                         e.path.startsWith(rootDir + '/') || e.path === rootDir
                     ).length;
@@ -146,7 +143,7 @@ export function BuildPanel({ workspaceId }: BuildPanelProps) {
             }
         });
 
-        return result.slice(0, 10); // Show first 10 directories
+        return result.slice(0, 10);
     }, [files.entries]);
 
     const handleProjectSelect = (project: string) => {
@@ -160,55 +157,55 @@ export function BuildPanel({ workspaceId }: BuildPanelProps) {
     };
 
     const getProjectIcon = (project: string) => {
-        if (project === '.') return <Folder className="h-3.5 w-3.5 text-[#58a6ff]" />;
-        return <FolderOpen className="h-3.5 w-3.5 text-[#58a6ff]" />;
+        if (project === '.') return <Folder className="h-3 w-3 text-secondary" />;
+        return <FolderOpen className="h-3 w-3 text-secondary" />;
     };
 
     return (
-        <section className="flex h-full min-h-0 flex-col bg-[#0d1117]">
+        <section className="flex h-full min-h-0 flex-col bg-surface-container-lowest">
             {/* Header */}
-            <header className="flex h-10 shrink-0 items-center justify-between border-b border-[#30363d] px-3">
-                <div className="flex items-center gap-2">
-                    <Hammer className="h-4 w-4 text-[#58a6ff]" />
-                    <span className="text-xs font-semibold text-gray-200">
+            <header className="flex h-8 shrink-0 items-center justify-between border-b border-outline-variant/30 bg-surface-container px-3">
+                <div className="flex items-center gap-2 font-mono text-[10.5px]">
+                    <Hammer className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-semibold uppercase tracking-wider text-on-surface">
                         Build
                     </span>
                     {build.isBuilding && (
-                        <span className="flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-300">
-                            <LoaderCircle className="h-3 w-3 animate-spin" />
-                            Building
+                        <span className="flex items-center gap-1 text-[10px] text-secondary">
+                            <span className="text-on-surface-variant/40">·</span>
+                            <LoaderCircle className="h-2.5 w-2.5 animate-spin" />
+                            <span>Building</span>
                         </span>
                     )}
-                    {/* Show project count badge */}
                     {build.projects.length > 1 && !build.loadingProjects && (
-                        <span className="rounded-full bg-[#21262d] px-2 py-0.5 text-[9px] text-gray-400">
-                            {build.projects.length - 1} projects
+                        <span className="text-[10px] text-on-surface-variant">
+                            <span className="text-on-surface-variant/40">·</span> {build.projects.length - 1} subproject{build.projects.length - 1 !== 1 ? 's' : ''}
                         </span>
                     )}
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                     {build.isBuilding ? (
                         <button
                             type="button"
                             onClick={handleCancelBuild}
-                            className="flex items-center gap-1.5 rounded border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300 transition hover:bg-red-500/20"
+                            className="flex items-center gap-1 rounded border border-error/30 bg-error/10 px-2 py-0.5 text-[10.5px] font-mono text-error transition hover:bg-error/20"
                         >
-                            <XCircle className="h-3.5 w-3.5" />
+                            <XCircle className="h-3 w-3" />
                             Cancel
                         </button>
                     ) : (
                         <button
                             type="button"
                             onClick={handleBuild}
-                            className="flex items-center gap-1.5 rounded bg-[#238636] px-3 py-1.5 text-[11px] font-medium text-white transition hover:bg-[#2ea043]"
+                            className="flex items-center gap-1 rounded bg-primary px-2.5 py-0.5 text-[10.5px] font-mono font-medium text-on-primary transition hover:bg-primary-fixed"
                         >
                             {hasResults ? (
-                                <RotateCcw className="h-3.5 w-3.5" />
+                                <RotateCcw className="h-3 w-3" />
                             ) : (
-                                <Play className="h-3.5 w-3.5 fill-current" />
+                                <Play className="h-3 w-3 fill-current" />
                             )}
-                            {hasResults ? 'Rebuild' : 'Build Project'}
+                            {hasResults ? 'Rebuild' : 'Build'}
                         </button>
                     )}
 
@@ -217,208 +214,157 @@ export function BuildPanel({ workspaceId }: BuildPanelProps) {
                         onClick={handleClear}
                         disabled={build.isBuilding || !hasResults}
                         title="Clear build output"
-                        className="rounded p-1.5 text-gray-500 transition hover:bg-[#21262d] hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded p-1 text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                        <RotateCcw className="h-3.5 w-3.5" />
+                        <RotateCcw className="h-3 w-3" />
                     </button>
                 </div>
             </header>
 
-            {/* ─── Project selector dropdown ─── */}
-            <div className="flex shrink-0 items-center gap-2 border-b border-[#30363d] px-3 py-1.5">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
-                    Project:
-                </span>
-                <div className="relative flex-1" ref={projectDropdownRef}>
-                    <button
-                        type="button"
-                        onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
-                        className="flex w-full items-center justify-between rounded border border-[#30363d] bg-[#0d1117] px-2 py-0.5 text-xs text-gray-200 transition hover:border-[#58a6ff] focus:outline-none focus:ring-1 focus:ring-[#58a6ff]"
-                        disabled={build.loadingProjects || build.isBuilding}
-                    >
-                        <span className="flex items-center gap-1.5">
+            {/* Project & Target Controls Bar */}
+            <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-outline-variant/20 bg-surface-container/60 px-3 py-1 font-mono text-[10.5px]">
+                {/* Project selector */}
+                <div className="flex items-center gap-1.5" ref={projectDropdownRef}>
+                    <span className="text-[9.5px] uppercase tracking-wider text-on-surface-variant/70">
+                        Project:
+                    </span>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
+                            className="flex items-center gap-1.5 rounded border border-outline-variant/30 bg-surface px-2 py-0.5 text-on-surface transition hover:border-secondary focus:outline-none"
+                            disabled={build.loadingProjects || build.isBuilding}
+                        >
                             {getProjectIcon(build.projectPath)}
-                            <span className="truncate">
+                            <span className="max-w-[140px] truncate">
                                 {getProjectDisplayName(build.projectPath)}
                             </span>
                             {build.loadingProjects && (
-                                <LoaderCircle className="ml-1 h-3 w-3 animate-spin text-gray-500" />
+                                <LoaderCircle className="h-2.5 w-2.5 animate-spin text-on-surface-variant" />
                             )}
-                        </span>
-                        <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform duration-200 ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
-                    </button>
+                            <ChevronDown className={`h-3 w-3 text-on-surface-variant transition-transform ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
 
-                    {isProjectDropdownOpen && (
-                        <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-60 overflow-y-auto rounded border border-[#30363d] bg-[#0d1117] py-1 shadow-xl">
-                            {build.loadingProjects ? (
-                                <div className="flex items-center justify-center gap-2 px-3 py-4 text-xs text-gray-500">
-                                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                                    Loading projects...
-                                </div>
-                            ) : build.projects.length === 0 ? (
-                                <div className="px-3 py-4 text-center text-xs text-gray-500">
-                                    <Folder className="mx-auto mb-1 h-8 w-8 text-gray-600" />
-                                    No projects found
-                                </div>
-                            ) : (
-                                <>
-                                    {/* Project list header */}
-                                    <div className="border-b border-[#21262d] px-3 py-1.5 text-[9px] uppercase tracking-wider text-gray-600">
-                                        {build.projects.length - 1} project{build.projects.length - 1 !== 1 ? 's' : ''} available
+                        {isProjectDropdownOpen && (
+                            <div className="absolute left-0 top-full z-20 mt-1 max-h-56 min-w-[200px] overflow-y-auto rounded border border-outline-variant/40 bg-surface-container-high py-1 shadow-2xl">
+                                {build.loadingProjects ? (
+                                    <div className="flex items-center justify-center gap-1.5 px-3 py-3 text-[10.5px] text-on-surface-variant">
+                                        <LoaderCircle className="h-3 w-3 animate-spin" />
+                                        Loading projects...
                                     </div>
-
-                                    {build.projects.map((project) => {
-                                        const isSelected = build.projectPath === project;
-                                        return (
-                                            <button
-                                                key={project}
-                                                type="button"
-                                                onClick={() => handleProjectSelect(project)}
-                                                className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition ${isSelected
-                                                        ? 'bg-[#1c2333] text-[#58a6ff]'
-                                                        : 'text-gray-300 hover:bg-[#21262d]'
-                                                    }`}
-                                            >
-                                                {getProjectIcon(project)}
-                                                <span className="flex-1 truncate text-left">
-                                                    {getProjectDisplayName(project)}
-                                                </span>
-                                                {isSelected && (
-                                                    <Check className="h-3.5 w-3.5 flex-shrink-0 text-[#58a6ff]" />
-                                                )}
-                                                {project === '.' && (
-                                                    <span className="rounded bg-[#21262d] px-1.5 py-0.5 text-[8px] text-gray-500">
-                                                        root
+                                ) : build.projects.length === 0 ? (
+                                    <div className="px-3 py-3 text-center text-[10.5px] text-on-surface-variant">
+                                        No projects found
+                                    </div>
+                                ) : (
+                                    // build.projects.map((project) => {
+                                    //     const isSelected = build.projectPath === project;
+                                    //     return (
+                                    //         <button
+                                    //             key={project}
+                                    //             type="button"
+                                    //             onClick={() => handleProjectSelect(project)}
+                                    //             className={`flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[10.5px] font-mono transition text-left ${isSelected
+                                    //                 ? 'bg-primary/10 text-primary'
+                                    //                 : 'text-on-surface hover:bg-surface-container'
+                                    //                 }`}
+                                    //         >
+                                    //             {getProjectIcon(project)}
+                                    //             <span className="flex-1 truncate">
+                                    //                 {getProjectDisplayName(project)}
+                                    //             </span>
+                                    //             {isSelected && (
+                                    //                 <Check className="h-3 w-3 text-primary shrink-0" />
+                                    //             )}
+                                    //         </button>
+                                    //     );
+                                    // })
+                                    directories.map((d: any) => {
+                                            const isSelected = build.projectPath === d.name;
+                                            return (
+                                                <button
+                                                    key={d.name}
+                                                    type="button"
+                                                    onClick={() => handleProjectSelect(d.path)}
+                                                    className={`flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[10.5px] font-mono transition text-left ${isSelected
+                                                        ? 'bg-primary/10 text-primary'
+                                                        : 'text-on-surface hover:bg-surface-container'
+                                                        }`}
+                                                >
+                                                    {getProjectIcon(d.path)}
+                                                    <span className="flex-1 truncate">
+                                                        {getProjectDisplayName(d.name)}
                                                     </span>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Refresh button */}
-                <button
-                    type="button"
-                    onClick={build.refreshProjects}
-                    disabled={build.loadingProjects}
-                    className="rounded p-1 text-gray-500 transition hover:bg-[#21262d] hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
-                    title="Refresh project list"
-                >
-                    <RefreshCw className={`h-3.5 w-3.5 ${build.loadingProjects ? 'animate-spin' : ''}`} />
-                </button>
-
-                {/* Current project indicator */}
-                {build.projectPath !== '.' && (
-                    <span className="hidden rounded bg-[#1c2333] px-2 py-0.5 text-[9px] text-[#58a6ff] sm:inline-block">
-                        {build.projectPath}
-                    </span>
-                )}
-            </div>
-
-            {/* ─── Workspace Directories ─── */}
-            <div className="flex shrink-0 items-center gap-2 border-b border-[#30363d] px-3 py-1.5">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
-                    Directories:
-                </span>
-                {files.isLoading ? (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <LoaderCircle className="h-3 w-3 animate-spin" />
-                        Loading...
-                    </div>
-                ) : directories.length === 0 ? (
-                    <span className="text-xs text-gray-500">No directories found</span>
-                ) : (
-                    <div className="flex flex-wrap items-center gap-1">
-                        {directories.map((dir) => (
-                            <button
-                                key={dir.path}
-                                type="button"
-                                onClick={() => handleProjectSelect(dir.path)}
-                                className="flex items-center gap-1 rounded bg-[#21262d] px-2 py-0.5 text-xs text-gray-300 transition hover:bg-[#30363d] hover:text-white"
-                                title={`${dir.count} items in ${dir.name}`}
-                            >
-                                <Folder className="h-3 w-3 text-[#58a6ff]" />
-                                <span>{dir.name}</span>
-                                <span className="text-[9px] text-gray-500">({dir.count})</span>
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* Build Options - Target */}
-            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#30363d] px-3 py-1.5">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
-                    Target:
-                </span>
-                <div className="relative flex-1 min-w-[120px]" ref={dropdownRef}>
-                    <button
-                        type="button"
-                        onClick={() => setIsBuildOptionsOpen(!isBuildOptionsOpen)}
-                        className="flex w-full items-center justify-between rounded border border-[#30363d] bg-[#0d1117] px-2 py-0.5 text-xs text-gray-200 transition hover:border-[#58a6ff] focus:outline-none focus:ring-1 focus:ring-[#58a6ff]"
-                        disabled={build.isBuilding}
-                    >
-                        <span className="flex items-center gap-1.5">
-                            <Hammer className="h-3.5 w-3.5 text-[#58a6ff]" />
-                            <span className="truncate">
-                                {build.buildTarget || 'Default Build'}
-                            </span>
-                        </span>
-                        <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform duration-200 ${isBuildOptionsOpen ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {isBuildOptionsOpen && (
-                        <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-60 overflow-y-auto rounded border border-[#30363d] bg-[#0d1117] py-1 shadow-xl">
-                            <div className="border-b border-[#21262d] px-3 py-1.5 text-[9px] uppercase tracking-wider text-gray-600">
-                                Build Targets
+                                                    {isSelected && (
+                                                        <Check className="h-3 w-3 text-primary shrink-0" />
+                                                    )}
+                                                </button>
+                                            );
+                                        })
+                                )}
                             </div>
-
-                            {buildTargets.map((target) => {
-                                const isSelected = build.buildTarget === target;
-                                return (
-                                    <button
-                                        key={target}
-                                        type="button"
-                                        onClick={() => {
-                                            build.setBuildTarget(target);
-                                            setIsBuildOptionsOpen(false);
-                                        }}
-                                        className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition ${isSelected
-                                                ? 'bg-[#1c2333] text-[#58a6ff]'
-                                                : 'text-gray-300 hover:bg-[#21262d]'
-                                            }`}
-                                    >
-                                        <Hammer className="h-3.5 w-3.5" />
-                                        <span className="flex-1 truncate text-left">
-                                            {target}
-                                        </span>
-                                        {isSelected && (
-                                            <Check className="h-3.5 w-3.5 flex-shrink-0 text-[#58a6ff]" />
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
 
-                {/* Current build status indicator */}
-                <span className={`text-[10px] ${getStatusColor(build.status)}`}>
-                    {getStatusText(build.status)}
-                </span>
+                {/* Target selector */}
+                <div className="flex items-center gap-1.5" ref={dropdownRef}>
+                    <span className="text-[9.5px] uppercase tracking-wider text-on-surface-variant/70">
+                        Target:
+                    </span>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setIsBuildOptionsOpen(!isBuildOptionsOpen)}
+                            className="flex items-center gap-1.5 rounded border border-outline-variant/30 bg-surface px-2 py-0.5 text-on-surface transition hover:border-secondary focus:outline-none"
+                            disabled={build.isBuilding}
+                        >
+                            <span>{build.buildTarget || 'Default Build'}</span>
+                            <ChevronDown className={`h-3 w-3 text-on-surface-variant transition-transform ${isBuildOptionsOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isBuildOptionsOpen && (
+                            <div className="absolute left-0 top-full z-20 mt-1 min-w-[140px] overflow-hidden rounded border border-outline-variant/40 bg-surface-container-high py-1 shadow-2xl">
+                                {buildTargets.map((target) => {
+                                    const isSelected = build.buildTarget === target;
+                                    return (
+                                        <button
+                                            key={target}
+                                            type="button"
+                                            onClick={() => {
+                                                build.setBuildTarget(target);
+                                                setIsBuildOptionsOpen(false);
+                                            }}
+                                            className={`flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[10.5px] font-mono transition text-left ${isSelected
+                                                ? 'bg-primary/10 text-primary'
+                                                : 'text-on-surface hover:bg-surface-container'
+                                                }`}
+                                        >
+                                            <span className="flex-1 truncate">{target}</span>
+                                            {isSelected && <Check className="h-3 w-3 text-primary shrink-0" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Status text */}
+                <div className="ml-auto flex items-center gap-1.5">
+                    <span className={`text-[10px] font-medium ${getStatusColor(build.status)}`}>
+                        {getStatusText(build.status)}
+                    </span>
+                </div>
             </div>
 
             {/* Main content */}
             {!hasResults && !build.isBuilding ? (
                 <EmptyBuildState onBuild={handleBuild} />
             ) : (
-                <div className="grid min-h-0 flex-1 grid-cols-[minmax(240px,36%)_1fr]">
+                <div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,32%)_1fr]">
                     {/* Build History */}
-                    <div className="min-h-0 overflow-y-auto border-r border-[#30363d]">
+                    <div className="min-h-0 overflow-y-auto border-r border-outline-variant/30">
                         <BuildSummary
                             status={build.status}
                             durationMs={build.duration}
@@ -427,33 +373,33 @@ export function BuildPanel({ workspaceId }: BuildPanelProps) {
                             projectPath={build.projectPath}
                         />
 
-                        <div className="border-t border-[#30363d]">
+                        <div className="border-t border-outline-variant/20">
                             {build.history.length === 0 && !build.currentOutput ? (
-                                <div className="px-4 py-6 text-center text-xs text-gray-600">
-                                    Waiting for build results...
+                                <div className="px-3 py-5 text-center font-mono text-[10.5px] text-on-surface-variant/60">
+                                    Waiting for build output...
                                 </div>
                             ) : (
                                 build.history.slice().reverse().map((entry, index) => (
                                     <div
                                         key={index}
-                                        className="flex items-start gap-2 border-b border-[#21262d] px-3 py-2.5"
+                                        className="flex items-start gap-2 border-b border-outline-variant/15 px-3 py-2 font-mono"
                                     >
-                                        {getStatusIcon(entry.status)}
+                                        <div className="mt-0.5">{getStatusIcon(entry.status)}</div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="break-all font-mono text-[11px] text-gray-300">
+                                            <p className="break-all text-[10.5px] font-medium text-on-surface">
                                                 Build #{build.history.length - index}
                                             </p>
-                                            <p className="text-[10px] text-gray-500">
-                                                {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '—'}
+                                            <p className="text-[9.5px] text-on-surface-variant/70">
+                                                {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '—'}
                                                 {entry.durationMs && ` · ${formatDuration(entry.durationMs)}`}
                                                 {entry.projectPath && entry.projectPath !== '.' && (
-                                                    <span className="ml-1 text-[9px] text-[#58a6ff]">
-                                                        in {entry.projectPath}
+                                                    <span className="ml-1 text-secondary">
+                                                        · {entry.projectPath}
                                                     </span>
                                                 )}
                                             </p>
                                             {entry.error && (
-                                                <p className="mt-1 text-[10px] text-red-400 truncate">
+                                                <p className="mt-1 truncate text-[10px] text-error">
                                                     {entry.error}
                                                 </p>
                                             )}
@@ -465,16 +411,15 @@ export function BuildPanel({ workspaceId }: BuildPanelProps) {
                     </div>
 
                     {/* Build Output */}
-                    <div className="flex min-h-0 flex-col">
-                        <div className="flex h-8 shrink-0 items-center justify-between border-b border-[#30363d] px-3">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                                Build Output
+                    <div className="flex min-h-0 flex-col bg-surface-container-lowest">
+                        <div className="flex h-7 shrink-0 items-center justify-between border-b border-outline-variant/20 bg-surface-container/40 px-3">
+                            <span className="font-mono text-[9.5px] font-semibold uppercase tracking-wider text-on-surface-variant">
+                                Output
                             </span>
-                            <div className="flex items-center gap-2">
-                                {/* Show current project in output header */}
+                            <div className="flex items-center gap-2 font-mono text-[9.5px] text-on-surface-variant">
                                 {build.projectPath !== '.' && (
-                                    <span className="flex items-center gap-1 rounded bg-[#1c2333] px-2 py-0.5 text-[9px] text-[#58a6ff]">
-                                        <FolderOpen className="h-3 w-3" />
+                                    <span className="flex items-center gap-1 text-secondary">
+                                        <FolderOpen className="h-2.5 w-2.5" />
                                         {build.projectPath}
                                     </span>
                                 )}
@@ -485,15 +430,15 @@ export function BuildPanel({ workspaceId }: BuildPanelProps) {
                                         output={build.currentOutput || build.history[build.history.length - 1]?.output || build.error || ''}
                                     />
                                 )}
-                                <span className="font-mono text-[10px] text-gray-600">
+                                <span>
                                     {build.buildTarget === 'Release' ? 'make build-release' :
                                         build.buildTarget === 'Debug' ? 'make build-debug' :
                                             'make build'}
                                 </span>
                             </div>
                         </div>
-                        <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-5 text-gray-300">
-                            {build.currentOutput || build.history[build.history.length - 1]?.output || 'Preparing build...'}
+                        <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-2.5 font-mono text-[10.5px] leading-relaxed text-on-surface">
+                            {build.currentOutput || build.history[build.history.length - 1]?.output || 'Running build pipeline...'}
                         </pre>
                     </div>
                 </div>
@@ -514,82 +459,49 @@ interface BuildSummaryProps {
 
 function BuildSummary({ status, durationMs, error, outputCount, projectPath }: BuildSummaryProps) {
     return (
-        <div className="grid grid-cols-2 gap-2 p-3">
-            <SummaryCard
-                label="Status"
-                value={getStatusText(status)}
-                icon={getStatusIcon(status)}
-                className={getStatusColor(status)}
-            />
-            <SummaryCard
-                label="Duration"
-                value={formatDuration(durationMs)}
-                icon={<Clock3 className="h-3.5 w-3.5 text-blue-400" />}
-            />
-            <SummaryCard
-                label="Builds"
-                value={outputCount}
-                icon={<Hammer className="h-3.5 w-3.5 text-gray-400" />}
-            />
-            <SummaryCard
-                label="Project"
-                value={projectPath === '.' ? 'Root' : projectPath}
-                icon={<FolderOpen className="h-3.5 w-3.5 text-[#58a6ff]" />}
-            />
-            <div className="col-span-2 rounded border border-[#30363d] bg-[#161b22] px-3 py-2">
-                <span className="text-[10px] uppercase tracking-wide text-gray-600">Status</span>
-                <p className={`mt-1 text-xs font-medium capitalize ${getStatusColor(status)}`}>
-                    {getStatusText(status)}
-                </p>
+        <div className="p-2 space-y-1.5 font-mono text-[10.5px]">
+            <div className="grid grid-cols-2 gap-1.5">
+                <div className="rounded border border-outline-variant/20 bg-surface-container p-2">
+                    <span className="text-[9px] uppercase tracking-wider text-on-surface-variant/70">Duration</span>
+                    <p className="mt-0.5 font-medium text-on-surface">{formatDuration(durationMs)}</p>
+                </div>
+                <div className="rounded border border-outline-variant/20 bg-surface-container p-2">
+                    <span className="text-[9px] uppercase tracking-wider text-on-surface-variant/70">Total Runs</span>
+                    <p className="mt-0.5 font-medium text-on-surface">{outputCount}</p>
+                </div>
             </div>
+
+            <div className="flex items-center justify-between rounded border border-outline-variant/20 bg-surface-container px-2.5 py-1.5">
+                <span className="text-[9.5px] uppercase tracking-wider text-on-surface-variant/70">Project</span>
+                <span className="text-secondary font-medium">{projectPath === '.' ? 'Root' : projectPath}</span>
+            </div>
+
             {error && (
-                <div className="col-span-2 rounded border border-red-900/50 bg-red-950/30 px-3 py-2">
-                    <span className="text-[10px] uppercase tracking-wide text-red-400">Error</span>
-                    <p className="mt-1 text-xs text-red-300">{error}</p>
+                <div className="rounded border border-error/30 bg-error/10 p-2 text-error">
+                    <span className="text-[9px] uppercase tracking-wider font-semibold">Error</span>
+                    <p className="mt-0.5 truncate text-[10px]">{error}</p>
                 </div>
             )}
         </div>
     );
 }
 
-interface SummaryCardProps {
-    label: string;
-    value: string | number;
-    icon: React.ReactNode;
-    className?: string;
-}
-
-function SummaryCard({ label, value, icon, className = '' }: SummaryCardProps) {
-    return (
-        <div className="rounded border border-[#30363d] bg-[#161b22] px-3 py-2">
-            <div className="flex items-center gap-1.5">
-                {icon}
-                <span className="text-[10px] uppercase tracking-wide text-gray-600">{label}</span>
-            </div>
-            <p className={`mt-1 font-mono text-sm font-semibold ${className || 'text-gray-200'}`}>
-                {value}
-            </p>
-        </div>
-    );
-}
-
 function EmptyBuildState({ onBuild }: { onBuild: () => void }) {
     return (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#30363d] bg-[#161b22]">
-                <Hammer className="h-5 w-5 text-[#58a6ff]" />
+        <div className="flex flex-1 flex-col items-center justify-center p-6 text-center font-mono">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-outline-variant/30 bg-surface-container">
+                <Hammer className="h-4 w-4 text-primary" />
             </div>
-            <h3 className="mt-4 text-sm font-semibold text-gray-200">Build your CKB contracts</h3>
-            <p className="mt-1 max-w-sm text-xs leading-5 text-gray-500">
-                Build the workspace project without entering commands in the terminal.
-                Build logs and results will appear here in real time.
+            <h3 className="mt-3 text-[12px] font-semibold text-on-surface">Build CKB Contracts</h3>
+            <p className="mt-1 max-w-xs text-[10.5px] leading-relaxed text-on-surface-variant">
+                Compile Rust or C smart contracts in the workspace container.
             </p>
             <button
                 type="button"
                 onClick={onBuild}
-                className="mt-4 flex items-center gap-2 rounded bg-[#238636] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2ea043]"
+                className="mt-3 flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-[10.5px] font-medium text-on-primary transition hover:bg-primary-fixed"
             >
-                <Play className="h-3.5 w-3.5 fill-current" />
+                <Play className="h-3 w-3 fill-current" />
                 Build Project
             </button>
         </div>

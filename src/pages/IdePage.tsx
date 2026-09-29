@@ -51,11 +51,13 @@ export default function IdePage() {
 
     return (
         // key: reset start-up state when switching between workspaces.
-        <WorkspaceStartup key={workspaceId} workspaceId={workspaceId}>
-            <WorkspaceIde
-                workspaceId={workspaceId}
-                activePanel={activePanel}
-            />
-        </WorkspaceStartup>
+        <div className="flex h-full w-full flex-1 flex-col min-h-0 overflow-hidden">
+            <WorkspaceStartup key={workspaceId} workspaceId={workspaceId}>
+                <WorkspaceIde
+                    workspaceId={workspaceId}
+                    activePanel={activePanel}
+                />
+            </WorkspaceStartup>
+        </div>
     );
 }

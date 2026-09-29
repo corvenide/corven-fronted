@@ -16,6 +16,11 @@ import type {
     WorkspaceTestRun,
 } from '../types/test.types';
 import { parseTestOutput } from '../utils/parseTestOutput';
+import {
+    cwdForCommand,
+    normalizeWorkspaceProjectPath,
+    parseProjectsList,
+} from '../utils/project-path';
 import { tokenStorage } from '../../../lib/token-storage';
 import { terminalServiceOrigin } from '../../../config/env';
 
@@ -61,10 +66,18 @@ export function useWorkspaceTests(workspaceId: string): UseWorkspaceTestsResult 
     const runIdRef = useRef<string | null>(null);
     const [run, setRun] = useState<WorkspaceTestRun>(EMPTY_RUN);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [projectPath, setProjectPath] = useState<string>('.');
+    const [projectPath, setProjectPathState] = useState<string>('.');
     const [projects, setProjects] = useState<string[]>(['.']);
     const [loadingProjects, setLoadingProjects] = useState(false);
     const [isSocketReady, setIsSocketReady] = useState(false);
+    const projectPathRef = useRef(projectPath);
+    projectPathRef.current = projectPath;
+
+    const setProjectPath = useCallback((path: string) => {
+        const normalized = normalizeWorkspaceProjectPath(path);
+        projectPathRef.current = normalized;
+        setProjectPathState(normalized);
+    }, []);
 
     const applyParsedOutput = useCallback((output: string) => {
         const parsed = parseTestOutput(output);
@@ -144,20 +157,13 @@ export function useWorkspaceTests(workspaceId: string): UseWorkspaceTestsResult 
             setLoadingProjects(false);
             if (data && data.projects) {
                 console.log(`[Socket] Received ${data.projects.length} projects:`, data.projects);
-                if (data.projects.length > 0) {
-                    const projectList = ['.', ...data.projects];
-                    setProjects(projectList);
-                    // If current projectPath is not in the list, reset to '.'
-                    setProjectPath((current) => {
-                        if (current !== '.' && !data.projects.includes(current)) {
-                            return '.';
-                        }
-                        return current;
-                    });
-                } else {
-                    console.log('[Socket] No projects found, using default');
-                    setProjects(['.']);
-                }
+                const detected = parseProjectsList(data.projects);
+                setProjects(['.', ...detected]);
+                setProjectPathState((current) => {
+                    const normalized = normalizeWorkspaceProjectPath(current);
+                    projectPathRef.current = normalized;
+                    return normalized;
+                });
             } else {
                 console.warn('[Socket] Invalid projects response:', data);
                 setProjects(['.']);
@@ -283,17 +289,19 @@ export function useWorkspaceTests(workspaceId: string): UseWorkspaceTestsResult 
             console.warn('[Tests] Cannot run tests: not authenticated');
             return;
         }
-        console.log(`[Tests] Running tests for workspace ${workspaceId} at path ${projectPath}`);
+        const selectedPath = projectPathRef.current;
+        const cwd = cwdForCommand(selectedPath) ?? '.';
+        console.log(`[Tests] Running tests for workspace ${workspaceId} at path ${cwd}`);
         outputRef.current = '';
         const runId = crypto.randomUUID();
         setRun({ ...EMPTY_RUN, status: 'queued', runId });
         socketRef.current.emit('test:run', {
             workspaceId,
             command: 'make test',
-            cwd: projectPath,
+            cwd,
             runId,
         });
-    }, [workspaceId, projectPath, isAuthenticated]);
+    }, [workspaceId, isAuthenticated]);
 
     const cancelTests = useCallback(() => {
         if (!run.runId) {

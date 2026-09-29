@@ -32,9 +32,9 @@ const TESTNET_FAUCET = 'https://faucet.nervos.org/';
 
 const NETWORK_LABEL: Record<DeployNetwork, string> = { DEVNET: 'Devnet', TESTNET: 'Testnet', MAINNET: 'Mainnet' };
 const NETWORK_BADGE: Record<DeployNetwork, string> = {
-    DEVNET: 'border-[#30363d] text-gray-300',
-    TESTNET: 'border-amber-500/40 text-amber-300',
-    MAINNET: 'border-rose-500/40 text-rose-300',
+    DEVNET: 'text-on-surface-variant',
+    TESTNET: 'text-secondary',
+    MAINNET: 'text-primary',
 };
 
 const keys = {
@@ -110,11 +110,11 @@ function CopyButton({ value, label, children }: { value: string; label: string; 
 
 function Field({ label, value, copy, href }: { label: string; value: string; copy?: boolean; href?: string }) {
     return (
-        <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2 py-0.5">
-            <span className="text-gray-500">{label}</span>
-            <span className="flex min-w-0 items-center gap-1 font-mono text-gray-300">
+        <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-2 py-0.5 font-mono text-[10.5px]">
+            <span className="text-on-surface-variant/70 uppercase text-[9.5px]">{label}</span>
+            <span className="flex min-w-0 items-center gap-1 text-on-surface">
                 {href ? (
-                    <a href={href} target="_blank" rel="noreferrer noopener" className="truncate text-[#79b8ff] hover:underline">
+                    <a href={href} target="_blank" rel="noreferrer noopener" className="truncate text-secondary hover:underline">
                         {value}
                     </a>
                 ) : (
@@ -130,19 +130,20 @@ function DeploymentRow({ deployment, open, onToggle }: { deployment: ContractDep
     const explorerTx = deployment.network === 'TESTNET' ? `${TESTNET_EXPLORER}/transaction/${deployment.txHash}` : undefined;
 
     return (
-        <li className="border-b border-[#21262d] last:border-b-0">
-            <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#161b22]">
-                {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />}
-                <span className="min-w-0 truncate font-mono text-[12px] text-gray-100">{deployment.contractName}</span>
-                <span className={`shrink-0 rounded border px-1.5 text-[10px] ${NETWORK_BADGE[deployment.network]}`}>{NETWORK_LABEL[deployment.network]}</span>
-                {deployment.upgradeOfId && <span className="shrink-0 rounded border border-[#1f6feb]/40 px-1.5 text-[10px] text-[#79b8ff]">upgrade</span>}
-                {deployment.typeId && !deployment.upgradeOfId && <span className="shrink-0 text-[10px] text-gray-500">upgradable</span>}
-                <span className="ml-auto shrink-0 font-mono text-[11px] text-gray-500">{short(deployment.codeHash, 6, 4)}</span>
-                <span className="w-16 shrink-0 text-right text-[11px] text-gray-500">{timeAgo(deployment.createdAt)}</span>
+        <li className="border-b border-outline-variant/20 last:border-b-0 font-mono text-[10.5px]">
+            <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-container">
+                {open ? <ChevronDown className="h-3 w-3 shrink-0 text-on-surface-variant" /> : <ChevronRight className="h-3 w-3 shrink-0 text-on-surface-variant" />}
+                <span className="min-w-0 truncate font-medium text-on-surface">{deployment.contractName}</span>
+                <span className="text-on-surface-variant/40">·</span>
+                <span className={`shrink-0 text-[10px] ${NETWORK_BADGE[deployment.network]}`}>{NETWORK_LABEL[deployment.network]}</span>
+                {deployment.upgradeOfId && <span className="shrink-0 text-[10px] text-secondary">upgrade</span>}
+                {deployment.typeId && !deployment.upgradeOfId && <span className="shrink-0 text-[10px] text-on-surface-variant/60">upgradable</span>}
+                <span className="ml-auto shrink-0 text-[10px] text-on-surface-variant">{short(deployment.codeHash, 6, 4)}</span>
+                <span className="w-14 shrink-0 text-right text-[9.5px] text-on-surface-variant/60">{timeAgo(deployment.createdAt)}</span>
             </button>
 
             {open && (
-                <div className="space-y-2 px-3 pb-3 pl-8 text-[11.5px]">
+                <div className="space-y-2 px-3 pb-3 pl-7 text-[10.5px]">
                     <div>
                         <Field label="Code hash" value={deployment.codeHash} copy />
                         <Field label="Hash type" value={deployment.hashType} />
@@ -152,18 +153,18 @@ function DeploymentRow({ deployment, open, onToggle }: { deployment: ContractDep
                         <Field label="Size" value={`${formatBytes(deployment.sizeBytes)} · ${formatCkb(deployment.capacity)} CKB locked`} />
                         {deployment.deployerAddress && <Field label="Owner" value={deployment.deployerAddress} copy />}
                     </div>
-                    <div className="overflow-hidden rounded-md border border-[#30363d]">
-                        <div className="flex h-7 items-center justify-between border-b border-[#21262d] bg-[#161b22] px-2.5">
-                            <span className="text-[10.5px] uppercase tracking-wide text-gray-500">Use it with CCC</span>
+                    <div className="overflow-hidden rounded border border-outline-variant/30">
+                        <div className="flex h-6 items-center justify-between border-b border-outline-variant/20 bg-surface-container px-2">
+                            <span className="text-[9px] uppercase tracking-wide text-on-surface-variant font-mono">Use with CCC</span>
                             <CopyButton value={cccSnippet(deployment)} label="Copy snippet">
-                                <span className="text-[11px]">Copy</span>
+                                <span className="text-[10px]">Copy</span>
                             </CopyButton>
                         </div>
-                        <pre className="overflow-x-auto bg-[#0d1117] p-2.5 font-mono text-[11px] leading-[1.55] text-gray-300">{cccSnippet(deployment)}</pre>
+                        <pre className="overflow-x-auto bg-surface-container-lowest p-2 font-mono text-[10px] leading-relaxed text-on-surface">{cccSnippet(deployment)}</pre>
                     </div>
                     {deployment.typeId && (
-                        <p className="text-[11px] text-gray-500">
-                            Upgradable: redeploying keeps this code hash. Always use the newest cell dep; the old one is spent on upgrade.
+                        <p className="text-[10px] text-on-surface-variant/70">
+                            Upgradable: redeploying keeps this code hash. The old cell dep is spent on upgrade.
                         </p>
                     )}
                 </div>
@@ -305,12 +306,12 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
     const deployLabel = previous ? 'Upgrade' : 'Deploy';
 
     return (
-        <div className="grid h-full min-h-0 grid-cols-[minmax(260px,340px)_minmax(0,1fr)] text-[12.5px]">
+        <div className="grid h-full min-h-0 grid-cols-[minmax(240px,320px)_minmax(0,1fr)] font-mono text-[10.5px] bg-surface-container-lowest">
             {/* ---------------------------------------------------- Form */}
-            <div className="min-h-0 space-y-3 overflow-y-auto border-r border-[#30363d] p-3">
+            <div className="min-h-0 space-y-2.5 overflow-y-auto border-r border-outline-variant/30 p-3 bg-surface-container-low">
                 <div>
                     <div className="mb-1 flex items-center justify-between">
-                        <label htmlFor="deploy-contract" className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                        <label htmlFor="deploy-contract" className="text-[9.5px] font-semibold uppercase tracking-wider text-on-surface-variant/80">
                             Contract
                         </label>
                         <button
@@ -318,28 +319,28 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
                             onClick={() => void contracts.refetch()}
                             title="Refresh built contracts"
                             aria-label="Refresh built contracts"
-                            className="rounded p-0.5 text-gray-500 hover:bg-[#21262d] hover:text-gray-200"
+                            className="rounded p-0.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                         >
                             <RefreshCw className={`h-3 w-3 ${contracts.isFetching ? 'animate-spin' : ''}`} />
                         </button>
                     </div>
 
                     {contracts.isError ? (
-                        <p className="text-rose-300">{(contracts.error as Error).message}</p>
+                        <p className="text-error">{(contracts.error as Error).message}</p>
                     ) : contracts.data && contracts.data.length === 0 ? (
-                        <p className="rounded-md border border-dashed border-[#30363d] px-3 py-2 text-gray-400">
-                            No built contracts yet. Run a build in the Build tab, then refresh.
+                        <p className="rounded border border-dashed border-outline-variant/30 px-2.5 py-2 text-on-surface-variant/60">
+                            No built contracts. Run a build in the Build tab.
                         </p>
                     ) : (
                         <select
                             id="deploy-contract"
                             value={contract}
                             onChange={(event) => setContract(event.target.value)}
-                            className="h-8 w-full rounded-md border border-[#30363d] bg-[#0d1117] px-2 font-mono text-[12px] text-gray-200 focus:border-[#58a6ff] focus:outline-none"
+                            className="h-7 w-full rounded border border-outline-variant/30 bg-surface px-2 text-[10.5px] text-on-surface focus:border-secondary focus:outline-none"
                         >
                             {(contracts.data ?? []).map((c) => (
                                 <option key={c.name} value={c.name}>
-                                    {c.name} · {formatBytes(c.sizeBytes)} · built {timeAgo(c.builtAt)}
+                                    {c.name} · {formatBytes(c.sizeBytes)} · {timeAgo(c.builtAt)}
                                 </option>
                             ))}
                         </select>
@@ -347,8 +348,8 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
                 </div>
 
                 <div>
-                    <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">Network</div>
-                    <div role="radiogroup" className="grid grid-cols-2 rounded-md border border-[#30363d] p-0.5">
+                    <div className="mb-1 text-[9.5px] font-semibold uppercase tracking-wider text-on-surface-variant/80">Network</div>
+                    <div role="radiogroup" className="grid grid-cols-2 rounded border border-outline-variant/30 p-0.5 bg-surface">
                         {(['DEVNET', 'TESTNET'] as const).map((n) => (
                             <button
                                 key={n}
@@ -356,7 +357,7 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
                                 role="radio"
                                 aria-checked={network === n}
                                 onClick={() => setNetwork(n)}
-                                className={`h-7 rounded text-[12px] ${network === n ? 'bg-[#21262d] font-medium text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                                className={`h-6 rounded text-[10px] font-mono transition-colors ${network === n ? 'bg-surface-container-high font-medium text-primary' : 'text-on-surface-variant hover:text-on-surface'}`}
                             >
                                 {NETWORK_LABEL[n]}
                             </button>
@@ -365,34 +366,34 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
                 </div>
 
                 <label className="flex cursor-pointer items-start gap-2">
-                    <input type="checkbox" checked={upgradable} onChange={(e) => setUpgradable(e.target.checked)} className="mt-0.5 accent-[#58a6ff]" />
+                    <input type="checkbox" checked={upgradable} onChange={(e) => setUpgradable(e.target.checked)} className="mt-0.5 accent-primary" />
                     <span>
-                        <span className="text-gray-200">Upgradable (Type ID)</span>
-                        <span className="block text-[11px] text-gray-500">Redeploying keeps the same code hash.</span>
+                        <span className="text-on-surface">Upgradable (Type ID)</span>
+                        <span className="block text-[9.5px] text-on-surface-variant/70">Redeploying preserves code hash.</span>
                     </span>
                 </label>
 
                 {/* Network-specific state */}
                 {network === 'DEVNET' ? (
                     devnetState === 'running' ? (
-                        <p className="text-[11.5px] text-gray-500">
-                            <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 align-middle" />
-                            Devnet running. The devnet’s test account pays.
+                        <p className="text-[10px] text-on-surface-variant">
+                            <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle" />
+                            Devnet active · test account pays
                         </p>
                     ) : devnetState === 'starting' ? (
-                        <p className="flex items-center gap-1.5 text-[11.5px] text-[#79b8ff]">
+                        <p className="flex items-center gap-1.5 text-[10px] text-secondary">
                             <Loader2 className="h-3 w-3 animate-spin" /> Devnet starting…
                         </p>
                     ) : (
-                        <div className="flex items-center justify-between gap-2 rounded-md border border-[#30363d] px-2.5 py-2">
-                            <span className="text-gray-400">{devnetState === 'failed' ? 'The devnet failed to start.' : 'The devnet is off.'}</span>
+                        <div className="flex items-center justify-between gap-2 rounded border border-outline-variant/30 px-2 py-1.5 bg-surface">
+                            <span className="text-on-surface-variant">{devnetState === 'failed' ? 'Devnet failed' : 'Devnet offline'}</span>
                             <button
                                 type="button"
                                 onClick={() => startDevnet.mutate()}
                                 disabled={startDevnet.isPending}
-                                className="inline-flex h-6 items-center gap-1 rounded border border-[#30363d] px-2 text-[11.5px] text-gray-200 hover:bg-[#21262d] disabled:opacity-50"
+                                className="inline-flex h-5 items-center gap-1 rounded bg-surface-container px-2 text-[10px] text-on-surface hover:bg-surface-container-high disabled:opacity-50"
                             >
-                                <Play className="h-3 w-3" /> Start
+                                <Play className="h-2.5 w-2.5" /> Start
                             </button>
                         </div>
                     )
@@ -400,30 +401,30 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
                     <button
                         type="button"
                         onClick={() => openWallet()}
-                        className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-[#30363d] text-gray-200 hover:bg-[#21262d]"
+                        className="flex h-7 w-full items-center justify-center gap-1.5 rounded border border-outline-variant/30 bg-surface text-on-surface hover:bg-surface-container"
                     >
-                        <Wallet className="h-3.5 w-3.5" /> Connect wallet
+                        <Wallet className="h-3 w-3" /> Connect wallet
                     </button>
                 ) : !onTestnet ? (
-                    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-amber-200">
-                        Your wallet is on mainnet.{' '}
+                    <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-amber-200">
+                        Wallet on mainnet.{' '}
                         <button type="button" onClick={() => setClient(new ccc.ClientPublicTestnet())} className="font-medium underline-offset-2 hover:underline">
                             Switch to testnet
                         </button>
                     </div>
                 ) : (
-                    <div className="space-y-1 rounded-md border border-[#30363d] px-2.5 py-2">
+                    <div className="space-y-1 rounded border border-outline-variant/30 bg-surface px-2 py-1.5">
                         <div className="flex items-center justify-between gap-2">
-                            <span className="truncate font-mono text-[11.5px] text-gray-300">{wallet.data ? short(wallet.data.address, 10, 6) : '…'}</span>
-                            <span className="shrink-0 font-mono text-[11.5px] text-gray-200">
+                            <span className="truncate text-on-surface-variant">{wallet.data ? short(wallet.data.address, 8, 4) : '…'}</span>
+                            <span className="shrink-0 text-on-surface">
                                 {wallet.data ? `${formatCkb(wallet.data.balance)} CKB` : '—'}
                             </span>
                         </div>
                         {insufficient && (
-                            <p className="text-[11px] text-amber-300">
-                                Not enough CKB.{' '}
+                            <p className="text-[9.5px] text-amber-300">
+                                Low CKB balance.{' '}
                                 <a href={TESTNET_FAUCET} target="_blank" rel="noreferrer noopener" className="underline-offset-2 hover:underline">
-                                    Get test CKB from the faucet
+                                    Faucet
                                 </a>
                             </p>
                         )}
@@ -431,10 +432,9 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
                 )}
 
                 {selected && (
-                    <p className="text-[11.5px] text-gray-500">
-                        Locks about <span className="font-mono text-gray-300">{formatCkb(estimate)} CKB</span> in the code cell
-                        {previous && network === 'TESTNET' ? ' (the old cell’s CKB is returned)' : ''}.
-                        {previous && <> Upgrades <span className="font-mono text-gray-400">{short(previous.codeHash, 6, 4)}</span>.</>}
+                    <p className="text-[10px] text-on-surface-variant/70">
+                        Capacity: <span className="text-on-surface">{formatCkb(estimate)} CKB</span>
+                        {previous && network === 'TESTNET' ? ' (old cell returned)' : ''}.
                     </p>
                 )}
 
@@ -442,37 +442,37 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
                     type="button"
                     onClick={() => deploy.mutate()}
                     disabled={!canDeploy}
-                    className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-[#238636] font-medium text-white transition-colors hover:bg-[#2ea043] disabled:bg-[#21262d] disabled:text-gray-500"
+                    className="flex h-7 w-full items-center justify-center gap-1.5 rounded bg-primary font-medium text-on-primary transition hover:bg-primary-fixed disabled:bg-surface-container disabled:text-on-surface-variant/50"
                 >
-                    {deploy.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+                    {deploy.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rocket className="h-3 w-3" />}
                     {deploy.isPending ? 'Deploying…' : `${deployLabel} to ${NETWORK_LABEL[network]}`}
                 </button>
 
-                {phase && <p className="text-center text-[11.5px] text-gray-400">{phase}</p>}
+                {phase && <p className="text-center text-[10px] text-on-surface-variant">{phase}</p>}
 
                 {deploy.isError && (
-                    <div className="flex items-start gap-2 rounded-md border border-rose-500/30 bg-rose-500/5 px-2.5 py-2 text-rose-200">
-                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span className="whitespace-pre-wrap break-words text-[11.5px]">{(deploy.error as Error).message}</span>
+                    <div className="flex items-start gap-1.5 rounded border border-error/30 bg-error/10 p-2 text-error">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                        <span className="whitespace-pre-wrap break-words text-[10px]">{(deploy.error as Error).message}</span>
                     </div>
                 )}
             </div>
 
             {/* ---------------------------------------------------- History */}
-            <div className="flex min-h-0 flex-col">
-                <div className="flex h-8 shrink-0 items-center justify-between border-b border-[#30363d] px-3">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Deployments</span>
-                    <span className="text-[10.5px] text-gray-600">{deployments.data?.length ?? 0}</span>
+            <div className="flex min-h-0 flex-col bg-surface-container-lowest">
+                <div className="flex h-8 shrink-0 items-center justify-between border-b border-outline-variant/30 bg-surface-container px-3">
+                    <span className="text-[9.5px] font-semibold uppercase tracking-wider text-on-surface-variant">Deployments</span>
+                    <span className="text-[10px] text-on-surface-variant/70">{deployments.data?.length ?? 0}</span>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto">
                     {deployments.isLoading ? (
-                        <div className="space-y-2 p-3">
-                            <div className="h-3 w-1/2 animate-pulse rounded bg-[#21262d]" />
-                            <div className="h-3 w-1/3 animate-pulse rounded bg-[#21262d]" />
+                        <div className="space-y-1.5 p-3">
+                            <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-container" />
+                            <div className="h-2.5 w-1/3 animate-pulse rounded bg-surface-container" />
                         </div>
                     ) : !deployments.data?.length ? (
-                        <div className="flex h-full items-center justify-center p-6 text-center text-[12px] text-gray-500">
-                            Deployed contracts appear here, with the code hash and cell dep to use them.
+                        <div className="flex h-full items-center justify-center p-6 text-center text-[11px] text-on-surface-variant/60">
+                            Deployed contracts appear here with code hash and cell deps.
                         </div>
                     ) : (
                         <ul>

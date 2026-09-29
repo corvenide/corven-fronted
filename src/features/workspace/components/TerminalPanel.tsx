@@ -69,17 +69,17 @@ function getStatusClassName(
 ): string {
     switch (status) {
         case 'connected':
-            return 'bg-emerald-500';
+            return 'bg-primary';
 
         case 'connecting':
-            return 'animate-pulse bg-amber-400';
+            return 'animate-pulse bg-secondary';
 
         case 'error':
-            return 'bg-red-500';
+            return 'bg-error';
 
         case 'disconnected':
         default:
-            return 'bg-gray-500';
+            return 'bg-outline';
     }
 }
 
@@ -256,10 +256,10 @@ export function TerminalPanel({
             fontFamily:
                 '"JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
 
-            fontSize: 12,
+            fontSize: 11.5,
             fontWeight: '400',
             fontWeightBold: '600',
-            lineHeight: 1.2,
+            lineHeight: 1.3,
             letterSpacing: 0,
 
             scrollback: 5000,
@@ -267,35 +267,32 @@ export function TerminalPanel({
             allowTransparency: true,
 
             theme: {
-                background: '#0d1117',
-                foreground: '#c9d1d9',
+                background: '#0a0e13',
+                foreground: '#e0e2ea',
 
-                cursor: '#c9d1d9',
-                cursorAccent: '#0d1117',
+                cursor: '#4edea3',
+                cursorAccent: '#0a0e13',
 
-                selectionBackground:
-                    '#264f78',
+                selectionBackground: 'rgba(78, 222, 163, 0.25)',
+                selectionInactiveBackground: 'rgba(78, 222, 163, 0.12)',
 
-                selectionInactiveBackground:
-                    '#1f2937',
+                black: '#101419',
+                red: '#ffb4ab',
+                green: '#4edea3',
+                yellow: '#fde047',
+                blue: '#4cd7f6',
+                magenta: '#d0bcff',
+                cyan: '#6ffbbe',
+                white: '#e0e2ea',
 
-                black: '#0d1117',
-                red: '#ff7b72',
-                green: '#7ee787',
-                yellow: '#d29922',
-                blue: '#58a6ff',
-                magenta: '#bc8cff',
-                cyan: '#39c5cf',
-                white: '#b1bac4',
-
-                brightBlack: '#484f58',
-                brightRed: '#ffa198',
-                brightGreen: '#56d364',
-                brightYellow: '#e3b341',
-                brightBlue: '#79c0ff',
-                brightMagenta: '#d2a8ff',
-                brightCyan: '#56d4dd',
-                brightWhite: '#f0f6fc',
+                brightBlack: '#36393f',
+                brightRed: '#ffdad6',
+                brightGreen: '#6ffbbe',
+                brightYellow: '#fef08a',
+                brightBlue: '#acedff',
+                brightMagenta: '#e9ddff',
+                brightCyan: '#a7f3d0',
+                brightWhite: '#ffffff',
             },
         });
 
@@ -447,13 +444,13 @@ export function TerminalPanel({
         }, []);
 
     const rootClassName = [
-        'flex min-h-0 flex-col bg-[#0d1117]',
+        'flex min-h-0 flex-col bg-surface-container-lowest',
 
         embedded
             ? 'h-full w-full'
             : isMaximized
-                ? 'absolute inset-0 z-50 h-full w-full border-t border-[#30363d]'
-                : 'h-64 w-full shrink-0 border-t border-[#30363d]',
+                ? 'absolute inset-0 z-50 h-full w-full border-t border-outline-variant/30'
+                : 'h-64 w-full shrink-0 border-t border-outline-variant/30',
 
         className,
     ].join(' ');
@@ -463,27 +460,13 @@ export function TerminalPanel({
             className={rootClassName}
         >
             {!embedded && (
-                <header className="flex h-9 shrink-0 items-center justify-between border-b border-[#21262d] bg-[#0d1117] px-3">
-                    <div className="flex h-full items-center gap-4">
-                        <div className="flex h-full items-center gap-2 border-b border-blue-500 px-1 text-[11px] font-medium uppercase tracking-wide text-gray-200">
-                            <TerminalSquare className="h-3.5 w-3.5" />
+                <header className="flex h-8 shrink-0 items-center justify-between border-b border-outline-variant/30 bg-surface-container px-3">
+                    <div className="flex h-full items-center gap-3">
+                        <div className="flex h-full items-center gap-1.5 border-b-2 border-primary px-1 text-[10.5px] font-mono font-medium uppercase tracking-wider text-primary">
+                            <TerminalSquare className="h-3 w-3" />
 
                             Terminal
                         </div>
-
-                        <button
-                            type="button"
-                            className="text-[11px] uppercase tracking-wide text-gray-500 transition hover:text-gray-300"
-                        >
-                            Output
-                        </button>
-
-                        <button
-                            type="button"
-                            className="text-[11px] uppercase tracking-wide text-gray-500 transition hover:text-gray-300"
-                        >
-                            Problems
-                        </button>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -496,26 +479,17 @@ export function TerminalPanel({
                             }
                         />
 
-                        <div className="flex items-center gap-0.5 text-gray-500">
+                        <div className="flex items-center gap-0.5 text-on-surface-variant">
                             <button
                                 type="button"
-                                className="rounded p-1 transition hover:bg-[#21262d] hover:text-gray-200"
+                                className="rounded p-1 transition hover:bg-surface-container-high hover:text-on-surface"
                                 aria-label="Create terminal"
                                 title="Create terminal"
                                 onClick={
                                     reconnectTerminal
                                 }
                             >
-                                <Plus className="h-3.5 w-3.5" />
-                            </button>
-
-                            <button
-                                type="button"
-                                className="rounded p-1 transition hover:bg-[#21262d] hover:text-gray-200"
-                                aria-label="Terminal options"
-                                title="Terminal options"
-                            >
-                                <ChevronDown className="h-3.5 w-3.5" />
+                                <Plus className="h-3 w-3" />
                             </button>
 
                             <button
@@ -523,11 +497,11 @@ export function TerminalPanel({
                                 onClick={
                                     reconnectTerminal
                                 }
-                                className="rounded p-1 transition hover:bg-[#21262d] hover:text-gray-200"
+                                className="rounded p-1 transition hover:bg-surface-container-high hover:text-on-surface"
                                 aria-label="Reconnect terminal"
                                 title="Reconnect terminal"
                             >
-                                <RotateCcw className="h-3.5 w-3.5" />
+                                <RotateCcw className="h-3 w-3" />
                             </button>
 
                             <button
@@ -535,11 +509,11 @@ export function TerminalPanel({
                                 onClick={
                                     clearTerminal
                                 }
-                                className="rounded p-1 transition hover:bg-[#21262d] hover:text-gray-200"
+                                className="rounded p-1 transition hover:bg-surface-container-high hover:text-on-surface"
                                 aria-label="Clear terminal"
                                 title="Clear terminal"
                             >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3 w-3" />
                             </button>
 
                             <button
@@ -547,7 +521,7 @@ export function TerminalPanel({
                                 onClick={
                                     toggleMaximized
                                 }
-                                className="rounded p-1 transition hover:bg-[#21262d] hover:text-gray-200"
+                                className="rounded p-1 transition hover:bg-surface-container-high hover:text-on-surface"
                                 aria-label={
                                     isMaximized
                                         ? 'Restore terminal'
@@ -560,9 +534,9 @@ export function TerminalPanel({
                                 }
                             >
                                 {isMaximized ? (
-                                    <Minus className="h-3.5 w-3.5" />
+                                    <Minus className="h-3 w-3" />
                                 ) : (
-                                    <Maximize2 className="h-3.5 w-3.5" />
+                                    <Maximize2 className="h-3 w-3" />
                                 )}
                             </button>
 
@@ -570,11 +544,11 @@ export function TerminalPanel({
                                 <button
                                     type="button"
                                     onClick={onClose}
-                                    className="rounded p-1 transition hover:bg-[#21262d] hover:text-gray-200"
+                                    className="rounded p-1 transition hover:bg-surface-container-high hover:text-on-surface"
                                     aria-label="Close terminal"
                                     title="Close terminal"
                                 >
-                                    <X className="h-3.5 w-3.5" />
+                                    <X className="h-3 w-3" />
                                 </button>
                             )}
                         </div>
@@ -583,7 +557,7 @@ export function TerminalPanel({
             )}
 
             {embedded && (
-                <div className="flex h-8 shrink-0 items-center justify-between border-b border-[#21262d] px-3">
+                <div className="flex h-7 shrink-0 items-center justify-between border-b border-outline-variant/20 px-3 bg-surface-container/60">
                     <TerminalStatus
                         status={
                             terminalSession.status
@@ -593,17 +567,17 @@ export function TerminalPanel({
                         }
                     />
 
-                    <div className="flex items-center gap-0.5 text-gray-500">
+                    <div className="flex items-center gap-0.5 text-on-surface-variant">
                         <button
                             type="button"
                             onClick={
                                 reconnectTerminal
                             }
-                            className="rounded p-1 transition hover:bg-[#21262d] hover:text-gray-200"
+                            className="rounded p-1 transition hover:bg-surface-container hover:text-on-surface"
                             aria-label="Reconnect terminal"
                             title="Reconnect terminal"
                         >
-                            <RotateCcw className="h-3.5 w-3.5" />
+                            <RotateCcw className="h-3 w-3" />
                         </button>
 
                         <button
@@ -611,18 +585,18 @@ export function TerminalPanel({
                             onClick={
                                 clearTerminal
                             }
-                            className="rounded p-1 transition hover:bg-[#21262d] hover:text-gray-200"
+                            className="rounded p-1 transition hover:bg-surface-container hover:text-on-surface"
                             aria-label="Clear terminal"
                             title="Clear terminal"
                         >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-3 w-3" />
                         </button>
                     </div>
                 </div>
             )}
 
             {terminalSession.error && (
-                <div className="shrink-0 border-b border-red-900/50 bg-red-950/30 px-3 py-1.5 text-[11px] text-red-300">
+                <div className="shrink-0 border-b border-error/30 bg-error/10 px-3 py-1 text-[10.5px] font-mono text-error">
                     {terminalSession.error}
                 </div>
             )}
@@ -649,7 +623,7 @@ function TerminalStatus({
 }: TerminalStatusProps) {
     return (
         <div
-            className="flex items-center gap-1.5"
+            className="flex items-center gap-1.5 font-mono text-[10px]"
             title={
                 error ??
                 getStatusText(status)
@@ -664,7 +638,7 @@ function TerminalStatus({
                 ].join(' ')}
             />
 
-            <span className="text-[10px] text-gray-500">
+            <span className="text-on-surface-variant">
                 {getStatusText(status)}
             </span>
         </div>

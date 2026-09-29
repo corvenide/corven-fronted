@@ -51,15 +51,15 @@ function useElapsed(running: boolean): number {
 
 function Shell({ children }: { children: ReactNode }) {
     return (
-        <div className="flex h-full min-h-[calc(100vh-3.5rem)] w-full items-center justify-center bg-[#0d1117] px-4 text-gray-200">
-            <div className="w-full max-w-[440px] rounded-xl border border-[#30363d] bg-[#161b22] p-7">{children}</div>
+        <div className="flex h-full min-h-[calc(100vh-3.5rem)] w-full items-center justify-center bg-surface px-4 text-on-surface">
+            <div className="w-full max-w-[420px] rounded-lg border border-outline-variant/30 bg-surface-container p-6 shadow-2xl">{children}</div>
         </div>
     );
 }
 
 function BackLink() {
     return (
-        <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-white">
+        <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-[11.5px] font-mono text-on-surface-variant hover:text-primary transition-colors">
             <ArrowLeft className="h-3.5 w-3.5" /> Back to dashboard
         </Link>
     );
@@ -71,21 +71,21 @@ function Progress({ status, elapsed }: { status: WorkspaceRuntimeStatus | null; 
 
     return (
         <Shell>
-            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-gray-500">Starting workspace</p>
-            <h1 className="mt-2 truncate text-lg font-semibold text-white">{status?.name ?? 'Workspace'}</h1>
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-on-surface-variant">Starting workspace</p>
+            <h1 className="mt-1.5 truncate text-[16px] font-semibold text-on-surface">{status?.name ?? 'Workspace'}</h1>
 
-            <ol className="mt-6 space-y-4" aria-live="polite">
+            <ol className="mt-5 space-y-3.5" aria-live="polite">
                 {STEPS.map((step, i) => {
                     const state = i < currentIndex ? 'done' : i === currentIndex ? 'active' : 'todo';
                     return (
-                        <li key={step.stage} className="flex gap-3">
+                        <li key={step.stage} className="flex gap-2.5">
                             <span
-                                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                                className={`mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border text-[11px] ${
                                     state === 'done'
-                                        ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
+                                        ? 'border-primary/40 bg-primary/15 text-primary'
                                         : state === 'active'
-                                          ? 'border-[#58a6ff]/50 text-[#58a6ff]'
-                                          : 'border-[#30363d] text-gray-600'
+                                          ? 'border-primary text-primary'
+                                          : 'border-outline-variant/30 text-on-surface-variant/40'
                                 }`}
                             >
                                 {state === 'done' ? (
@@ -97,15 +97,15 @@ function Progress({ status, elapsed }: { status: WorkspaceRuntimeStatus | null; 
                                 )}
                             </span>
                             <div>
-                                <div className={`text-[14px] ${state === 'todo' ? 'text-gray-500' : 'text-gray-100'}`}>{step.label}</div>
-                                {state === 'active' && <div className="mt-0.5 text-[12.5px] text-gray-500">{step.hint}</div>}
+                                <div className={`text-[12px] font-medium ${state === 'todo' ? 'text-on-surface-variant/60' : 'text-on-surface'}`}>{step.label}</div>
+                                {state === 'active' && <div className="mt-0.5 text-[11px] text-on-surface-variant">{step.hint}</div>}
                             </div>
                         </li>
                     );
                 })}
             </ol>
 
-            <div className="mt-7 flex items-center justify-between border-t border-[#30363d] pt-4 text-[12px] text-gray-500">
+            <div className="mt-6 flex items-center justify-between border-t border-outline-variant/20 pt-4 text-[11px] text-on-surface-variant">
                 <BackLink />
                 <span className="font-mono">{elapsed}s</span>
             </div>
@@ -116,22 +116,22 @@ function Progress({ status, elapsed }: { status: WorkspaceRuntimeStatus | null; 
 function Failed({ message, onRetry, retrying }: { message: string; onRetry: () => void; retrying: boolean }) {
     return (
         <Shell>
-            <div className="flex items-center gap-2 text-rose-400">
+            <div className="flex items-center gap-2 text-error font-mono">
                 <AlertTriangle className="h-4 w-4" />
-                <p className="text-[14px] font-semibold">The workspace didn’t start</p>
+                <p className="text-[13px] font-semibold">Workspace failed to start</p>
             </div>
-            <pre className="mt-4 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-[#30363d] bg-[#0d1117] p-3 font-mono text-[12px] leading-[1.6] text-gray-400">
+            <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap break-words rounded border border-outline-variant/30 bg-surface-container-lowest p-2.5 font-mono text-[11px] leading-relaxed text-on-surface-variant">
                 {message}
             </pre>
-            <div className="mt-6 flex items-center justify-between">
+            <div className="mt-5 flex items-center justify-between font-mono">
                 <BackLink />
                 <button
                     type="button"
                     onClick={onRetry}
                     disabled={retrying}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#1f6feb] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#388bfd] disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-[11px] font-medium text-on-primary hover:bg-primary-fixed disabled:opacity-60"
                 >
-                    {retrying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
+                    {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
                     Try again
                 </button>
             </div>
@@ -170,16 +170,16 @@ function DevnetControl({
     }[state];
 
     return (
-        <div className="flex h-9 items-center gap-2 border-t border-[#30363d] px-3 text-[12px] text-gray-300">
+        <div className="flex h-8 items-center gap-2 border-t border-outline-variant/30 bg-surface-container px-3 font-mono text-[10.5px] text-on-surface-variant">
             <span
-                className={`h-2 w-2 rounded-full ${
+                className={`h-1.5 w-1.5 rounded-full ${
                     state === 'running'
-                        ? 'bg-emerald-400'
+                        ? 'bg-primary'
                         : state === 'starting'
-                          ? 'animate-pulse bg-[#58a6ff]'
+                          ? 'animate-pulse bg-secondary'
                           : state === 'failed'
-                            ? 'bg-amber-400'
-                            : 'bg-gray-500'
+                            ? 'bg-error'
+                            : 'bg-outline'
                 }`}
             />
             <span role="status" className="flex-1 truncate">{label}</span>
@@ -187,13 +187,13 @@ function DevnetControl({
                 <button
                     type="button"
                     onClick={onStart}
-                    className="ml-1 inline-flex items-center gap-1 rounded-md bg-[#21262d] px-2 py-1 text-[11.5px] font-medium text-gray-100 hover:bg-[#30363d]"
+                    className="ml-1 inline-flex items-center gap-1 rounded bg-surface-container-high px-2 py-0.5 text-[10px] text-on-surface hover:text-primary transition-colors"
                 >
-                    {state === 'failed' ? <RotateCw className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                    {state === 'failed' ? <RotateCw className="h-2.5 w-2.5" /> : <Play className="h-2.5 w-2.5" />}
                     {state === 'failed' ? 'Retry' : 'Start'}
                 </button>
             )}
-            {state === 'starting' && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#58a6ff]" />}
+            {state === 'starting' && <Loader2 className="h-3 w-3 animate-spin text-secondary" />}
         </div>
     );
 }
@@ -217,19 +217,19 @@ function StartupBanner({
 }) {
     if (failedMessage) {
         return (
-            <div role="alert" className="flex items-center gap-3 border-b border-rose-500/30 bg-rose-500/10 px-4 py-2 text-[12.5px] text-rose-200">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+            <div role="alert" className="flex items-center gap-2.5 border-b border-error/30 bg-error/10 px-3 py-1.5 font-mono text-[11px] text-error">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 <span className="min-w-0 flex-1 truncate" title={failedMessage}>
-                    The workspace didn’t start: {failedMessage.split('\n')[0]}
+                    Workspace failed: {failedMessage.split('\n')[0]}
                 </span>
                 <button
                     type="button"
                     onClick={onRetry}
                     disabled={retrying}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#1f6feb] px-2.5 py-1 font-medium text-white hover:bg-[#388bfd] disabled:opacity-60"
+                    className="inline-flex shrink-0 items-center gap-1 rounded bg-error px-2 py-0.5 text-[10px] font-medium text-on-error hover:opacity-90 disabled:opacity-60"
                 >
-                    {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
-                    Try again
+                    {retrying ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RotateCw className="h-2.5 w-2.5" />}
+                    Retry
                 </button>
             </div>
         );
@@ -238,13 +238,12 @@ function StartupBanner({
     const step = STEPS.find((item) => item.stage === (status.provisionStage ?? 'preparing'));
 
     return (
-        <div role="status" className="flex items-center gap-3 border-b border-[#1f6feb]/30 bg-[#1f6feb]/10 px-4 py-2 text-[12.5px] text-[#c9d1d9]">
-            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[#58a6ff]" />
+        <div role="status" className="flex items-center gap-2.5 border-b border-primary/20 bg-primary/5 px-3 py-1.5 font-mono text-[11px] text-on-surface">
+            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
             <span className="min-w-0 flex-1 truncate">
-                Starting workspace{step ? ` · ${step.label}` : ''}. You can edit files now; the terminal,
-                build and tests are ready in a moment.
+                Starting workspace{step ? ` · ${step.label}` : ''}. Terminal and devnet connecting shortly.
             </span>
-            <span className="shrink-0 font-mono text-gray-500">{elapsed}s</span>
+            <span className="shrink-0 text-on-surface-variant/70">{elapsed}s</span>
         </div>
     );
 }

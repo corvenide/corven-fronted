@@ -46,8 +46,8 @@ export function ResizeHandle({
                         ? 'absolute top-0 h-full w-px -translate-x-1/2 '
                         : 'absolute left-0 h-px w-full -translate-y-1/2 ') +
                     (isDragging
-                        ? 'bg-blue-500'
-                        : 'bg-[#30363d] group-hover:bg-blue-500/70')
+                        ? 'bg-primary'
+                        : 'bg-outline-variant/40 hover:bg-primary/70')
                 }
             />
         </div>
