@@ -27,6 +27,7 @@ export default function AppLayout() {
     const isWorkspacesActive =
         (location.pathname === '/dashboard' && (!currentTab || currentTab === 'workspaces')) ||
         location.pathname.startsWith('/ide');
+    const isBrowserActive = location.pathname.startsWith('/browser');
     const isCommunityActive =
         location.pathname === '/community' ||
         (location.pathname === '/dashboard' && currentTab === 'community');
@@ -70,6 +71,20 @@ export default function AppLayout() {
                             }`}
                         >
                             Workspaces
+                        </Link>
+
+                        <Link
+                            to="/browser"
+                            className={`px-space-md py-1.5 transition-colors font-body-sm text-body-sm flex items-center gap-1.5 ${
+                                isBrowserActive
+                                    ? 'bg-surface-container text-on-surface font-medium rounded-lg border border-outline-variant/40'
+                                    : 'rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                            }`}
+                        >
+                            <span>Browser</span>
+                            <span className="px-1 py-0.2 rounded text-[10px] font-label-sm bg-primary/10 text-primary border border-primary/20">
+                                APP
+                            </span>
                         </Link>
 
                         <Link
@@ -162,6 +177,20 @@ export default function AppLayout() {
                         }
                     >
                         <span className="material-symbols-outlined text-[20px]">code_blocks</span>
+                    </NavLink>
+
+                    <NavLink
+                        to="/browser"
+                        title="Browser & Frontend Apps"
+                        className={({ isActive }) =>
+                            `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                                isActive
+                                    ? 'bg-surface-container text-primary border border-outline-variant/50'
+                                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/60'
+                            }`
+                        }
+                    >
+                        <span className="material-symbols-outlined text-[20px]">open_in_browser</span>
                     </NavLink>
 
                     <Link

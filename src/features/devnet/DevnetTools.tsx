@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 
 import { apiClient } from '../../lib/api-client';
+import { useAuth } from '../auth/hooks/useAuth';
 import { deployApi, type ContractDeployment } from '../deploy/deploy.api';
 import { workspaceKeys } from '../workspace/queries/workspace.keys';
 import {
@@ -66,8 +67,8 @@ function useDevnetClient(workspaceId: string) {
         () =>
             scripts.data
                 ? createDevnetClient(scripts.data, (payload) =>
-                      apiClient(`/workspaces/${workspaceId}/devnet/rpc`, { method: 'POST', body: JSON.stringify(payload) }),
-                  )
+                    apiClient(`/workspaces/${workspaceId}/devnet/rpc`, { method: 'POST', body: JSON.stringify(payload) }),
+                )
                 : null,
         [scripts.data, workspaceId],
     );
@@ -158,6 +159,7 @@ function SentBox({ txHash, children }: { txHash: string; children?: ReactNode })
 // ---------------------------------------------------------------------------
 
 export function AccountsTab({ workspaceId }: { workspaceId: string }) {
+    const { user } = useAuth();
     const queryClient = useQueryClient();
     const accounts = useAccounts(workspaceId);
     const { client, error: clientError } = useDevnetClient(workspaceId);
@@ -260,9 +262,19 @@ export function AccountsTab({ workspaceId }: { workspaceId: string }) {
                 <label className="block">
                     <Label>To address</Label>
                     <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="ckt1…" spellCheck={false} className={`${inputClass} font-mono`} />
-                    <span className="mt-1 flex flex-wrap gap-1">
+                    <span className="mt-1 flex flex-wrap gap-1 items-center">
+                        {user?.walletAddress && (
+                            <button
+                                type="button"
+                                onClick={() => setTo(user.walletAddress)}
+                                className="rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-mono text-primary hover:bg-primary/20 transition-colors"
+                                title="Fill my connected wallet address"
+                            >
+                                Connected Wallet
+                            </button>
+                        )}
                         {(accounts.data ?? []).slice(0, 6).filter((a) => a.index !== from).slice(0, 4).map((a) => (
-                            <button key={a.index} type="button" onClick={() => setTo(a.address)} className="rounded border border-[#30363d] px-1.5 text-[10.5px] text-gray-400 hover:text-gray-200">
+                            <button key={a.index} type="button" onClick={() => setTo(a.address)} className="rounded border border-outline-variant/30 px-1.5 py-0.5 text-[10.5px] text-on-surface-variant hover:text-on-surface hover:bg-surface-container">
                                 #{a.index}
                             </button>
                         ))}
@@ -806,9 +818,8 @@ export function TxBuilderTab({ workspaceId }: { workspaceId: string }) {
                 {clientError && <ErrorBox message={clientError.message} />}
                 {error && (
                     <ErrorBox
-                        message={`${describeError(error)}${
-                            send.isError ? '\n\nThe transaction was recorded by the devnet proxy; open the IDE’s Debug tab to replay its scripts.' : ''
-                        }`}
+                        message={`${describeError(error)}${send.isError ? '\n\nThe transaction was recorded by the devnet proxy; open the IDE’s Debug tab to replay its scripts.' : ''
+                            }`}
                     />
                 )}
                 {send.data && <SentBox txHash={send.data} />}

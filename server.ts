@@ -1,988 +1,1778 @@
 import express from "express";
+import http from "http";
 import path from "path";
+import { Server as SocketIOServer } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-// Default Virtual Files
-const initialFiles = [
+// ---------------------------------------------------------------------------
+// Seed Data: Test User & Initial Workspaces & CKB Files
+// ---------------------------------------------------------------------------
+
+const TEST_USER = {
+  id: "user-1",
+  name: "Ada",
+  email: "developer@corven.dev",
+  walletAddress: "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqwgx292hnvmn68xf779vmzrshpmm6epn4c0cgwga",
+  role: "USER",
+  authProvider: "CKB_WALLET",
+  createdAt: "2026-01-01T00:00:00.000Z",
+};
+
+function generateAccessToken(userId: string = TEST_USER.id): string {
+  const encode = (val: object) => Buffer.from(JSON.stringify(val)).toString("base64url");
+  const exp = Math.floor(Date.now() / 1000) + 7 * 24 * 3600; // 7 days
+  return `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ sub: userId, exp })}.corven_token`;
+}
+
+const TEMPLATES = [
   {
-    path: "cmd/main.go",
-    name: "main.go",
-    language: "go",
-    content: `package main
-
-import (
-    "log"
-    "os"
-    "fiber-app/internal/api"
-    "fiber-app/pkg/db"
-
-    "github.com/gofiber/fiber/v2"
-    "github.com/gofiber/fiber/v2/middleware/logger"
-    "github.com/gofiber/fiber/v2/middleware/cors"
-)
-
-func main() {
-    // Initialize Database
-    database := db.InitDB()
-    defer database.Close()
-
-    app := fiber.New(fiber.Config{
-        AppName: "FiberDev Microservice v1.2",
-    })
-
-    // Middleware
-    app.Use(logger.New())
-    app.Use(cors.New())
-
-    // Base route
-    app.Get("/", func(c *fiber.Ctx) error {
-        return c.JSON(fiber.Map{
-            "status": "online",
-            "message": "Welcome to FiberDev high-performance blockchain node api",
-            "version": "1.2.0",
-        })
-    })
-
-    // API Routes Group
-    v1 := app.Group("/api/v1")
-    
-    // Posts routes
-    v1.Post("/posts", api.CreatePost)
-    v1.Get("/posts", api.GetPosts)
-    v1.Get("/posts/:id", api.GetPostByID)
-
-    // User routes
-    v1.Post("/users", api.CreateUser)
-    v1.Get("/users/:id", api.GetUserByID)
-
-    // Run Server
-    port := os.Getenv("PORT")
-    if port == "" {
-        port = "3000"
-    }
-
-    log.Printf("Starting Fiber server on port %s", port)
-    if err := app.Listen(":" + port); err != nil {
-        log.Fatalf("Failed to start server: %v", err)
-    }
-}`
+    id: "hello-world",
+    name: "Hello World Contract",
+    description: "A minimal Nervos CKB smart contract in Rust that validates cell data.",
+    contracts: ["hello-world"],
   },
   {
-    path: "internal/api/post.go",
-    name: "post.go",
-    language: "go",
-    content: `package api
-
-import (
-    "net/http"
-    "strconv"
-    "fiber-app/internal/models"
-    "fiber-app/pkg/db"
-
-    "github.com/gofiber/fiber/v2"
-)
-
-// CreatePost handles POST /api/v1/posts
-func CreatePost(c *fiber.Ctx) error {
-    post := new(models.Post)
-
-    // Parse request body
-    if err := c.BodyParser(post); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Cannot parse JSON payload",
-        })
-    }
-
-    // Simple validation
-    if post.Title == "" || post.Content == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Title and Content are required fields",
-        })
-    }
-
-    // Save to simulated database
-    db.SavePost(post)
-
-    return c.Status(fiber.StatusCreated).JSON(post)
-}
-
-// GetPosts handles GET /api/v1/posts
-func GetPosts(c *fiber.Ctx) error {
-    posts := db.GetAllPosts()
-    return c.JSON(posts)
-}
-
-// GetPostByID handles GET /api/v1/posts/:id
-func GetPostByID(c *fiber.Ctx) error {
-    id, err := strconv.Atoi(c.Params("id"))
-    if err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid post ID format",
-        })
-    }
-
-    post, found := db.GetPostByID(id)
-    if !found {
-        return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-            "error": "Post not found in database",
-        })
-    }
-
-    return c.JSON(post)
-}`
+    id: "xudt",
+    name: "Token (xUDT)",
+    description: "Extensible User Defined Token implementation for Nervos CKB.",
+    contracts: ["xudt"],
   },
   {
-    path: "internal/api/user.go",
-    name: "user.go",
-    language: "go",
-    content: `package api
-
-import (
-    "fiber-app/internal/models"
-    "fiber-app/pkg/db"
-
-    "github.com/gofiber/fiber/v2"
-)
-
-// CreateUser handles POST /api/v1/users
-func CreateUser(c *fiber.Ctx) error {
-    user := new(models.User)
-
-    if err := c.BodyParser(user); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Cannot parse JSON",
-        })
-    }
-
-    if user.Username == "" || user.Email == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Username and Email are required",
-        })
-    }
-
-    db.SaveUser(user)
-    return c.Status(fiber.StatusCreated).JSON(user)
-}
-
-// GetUserByID handles GET /api/v1/users/:id
-func GetUserByID(c *fiber.Ctx) error {
-    id := c.Params("id")
-    user, found := db.GetUserByUsername(id)
-    if !found {
-        return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-            "error": "User not found",
-        })
-    }
-
-    return c.JSON(user)
-}`
+    id: "spore",
+    name: "Spore Digital Object",
+    description: "On-chain digital objects and NFT standard for Nervos CKB.",
+    contracts: ["spore"],
   },
-  {
-    path: "internal/models/post.go",
-    name: "post.go",
-    language: "go",
-    content: `package models
-
-import "time"
-
-// Post represents a blog post model
-type Post struct {
-    ID        int       \`json:"id"\`
-    Title     string    \`json:"title"\`
-    Content   string    \`json:"content"\`
-    AuthorID  int       \`json:"author_id"\`
-    CreatedAt time.Time \`json:"created_at"\`
-}`
-  },
-  {
-    path: "internal/models/user.go",
-    name: "user.go",
-    language: "go",
-    content: `package models
-
-// User represents a system user model
-type User struct {
-    ID       int    \`json:"id"\`
-    Username string \`json:"username"\`
-    Email    string \`json:"email"\`
-    Role     string \`json:"role"\`
-}`
-  },
-  {
-    path: "pkg/db/db.go",
-    name: "db.go",
-    language: "go",
-    content: `package db
-
-import (
-    "log"
-    "sync"
-    "time"
-    "fiber-app/internal/models"
-)
-
-type Database struct {
-    mu    sync.RWMutex
-    posts map[int]*models.Post
-    users map[string]*models.User
-}
-
-var (
-    instance *Database
-    once     sync.Once
-)
-
-// InitDB initializes a singleton mock database
-func InitDB() *Database {
-    once.Do(func() {
-        instance = &Database{
-            posts: make(map[int]*models.Post),
-            users: make(map[string]*models.User),
-        }
-        
-        // Seed some data
-        instance.posts[1] = &models.Post{
-            ID:        1,
-            Title:     "Building ultra high performance APIs",
-            Content:   "Go and Fiber represent an exceptional combination for speed and lightweight memory foot print...",
-            AuthorID:  101,
-            CreatedAt: time.Now().Add(-2 * time.Hour),
-        }
-        
-        instance.users["johndoe"] = &models.User{
-            ID:       101,
-            Username: "johndoe",
-            Email:    "john@fiberdev.io",
-            Role:     "Core Developer",
-        }
-        
-        log.Println("Database connection established successfully")
-    })
-    return instance
-}
-
-func (db *Database) Close() {
-    log.Println("Database connection closed cleanly")
-}
-
-func SavePost(post *models.Post) {
-    instance.mu.Lock()
-    defer instance.mu.Unlock()
-    
-    post.ID = len(instance.posts) + 1
-    post.CreatedAt = time.Now()
-    instance.posts[post.ID] = post
-}
-
-func GetAllPosts() []*models.Post {
-    instance.mu.RLock()
-    defer instance.mu.RUnlock()
-    
-    var list []*models.Post
-    for _, p := range instance.posts {
-        list = append(list, p)
-    }
-    return list
-}
-
-func GetPostByID(id int) (*models.Post, bool) {
-    instance.mu.RLock()
-    defer instance.mu.RUnlock()
-    
-    post, found := instance.posts[id]
-    return post, found
-}
-
-func SaveUser(user *models.User) {
-    instance.mu.Lock()
-    defer instance.mu.Unlock()
-    
-    user.ID = len(instance.users) + 1
-    instance.users[user.Username] = user
-}
-
-func GetUserByUsername(username string) (*models.User, bool) {
-    instance.mu.RLock()
-    defer instance.mu.RUnlock()
-    
-    user, found := instance.users[username]
-    return user, found
-}`
-  },
-  {
-    path: "go.mod",
-    name: "go.mod",
-    language: "makefile",
-    content: `module fiber-app
-
-go 1.22
-
-require (
-	github.com/gofiber/fiber/v2 v2.52.2
-	github.com/google/uuid v1.6.0
-)`
-  },
-  {
-    path: "go.sum",
-    name: "go.sum",
-    language: "makefile",
-    content: `github.com/gofiber/fiber/v2 v2.52.2 h1:7y139H156XyC/80f7PZ6S...
-github.com/google/uuid v1.6.0 h1:NI9v...`
-  },
-  {
-    path: "README.md",
-    name: "README.md",
-    language: "markdown",
-    content: `# FiberDev Blockchain API Service
-
-A professional, high-performance Go microservice running on top of **Fiber v2** and custom high-speed blockchain network layers.
-
-## Features
-- **Express-level simplicity** with native Go concurrency.
-- **Embedded virtual in-memory store** utilizing thread-safe maps and read-write locks (\`sync.RWMutex\`).
-- **Fully containerized pipeline** ready to deploy onto FiberDev testnets or mainnets in 1 click.
-
-## API Endpoints
-- \`GET /\` - Health check & server status.
-- \`POST /api/v1/posts\` - Create post.
-- \`GET /api/v1/posts\` - Retrieve all posts.
-- \`GET /api/v1/posts/:id\` - Find post by ID.`
-  }
 ];
 
-// Lazy Gemini API Client
+interface WorkspaceFileRecord {
+  path: string;
+  name: string;
+  type: "file" | "directory";
+  content?: string;
+  size?: number;
+}
+
+const DEFAULT_WORKSPACE_FILES: Record<string, WorkspaceFileRecord[]> = {
+  "ws-default": [
+    {
+      path: "contracts",
+      name: "contracts",
+      type: "directory",
+    },
+    {
+      path: "contracts/hello-world",
+      name: "hello-world",
+      type: "directory",
+    },
+    {
+      path: "contracts/hello-world/Cargo.toml",
+      name: "Cargo.toml",
+      type: "file",
+      content: `[package]
+name = "hello-world"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ckb-std = "0.15.2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+`,
+    },
+    {
+      path: "contracts/hello-world/src",
+      name: "src",
+      type: "directory",
+    },
+    {
+      path: "contracts/hello-world/src/main.rs",
+      name: "main.rs",
+      type: "file",
+      content: `//! Hello World smart contract for Nervos CKB
+#![no_std]
+#![no_main]
+
+use ckb_std::{
+    default_alloc,
+    entry,
+    error::SysError,
+    high_level::{load_script, load_tx_hash},
+    ckb_constants::Source,
+};
+
+default_alloc!();
+
+#[entry]
+fn main() -> Result<(), SysError> {
+    // Read the script that is executing
+    let script = load_script()?;
+    let _args: &[u8] = script.args().as_slice();
+
+    // Verify cell conditions
+    let tx_hash = load_tx_hash()?;
+    ckb_std::debug!("Executing hello-world contract in Tx: {:?}", tx_hash);
+
+    Ok(())
+}
+`,
+    },
+    {
+      path: "schemas",
+      name: "schemas",
+      type: "directory",
+    },
+    {
+      path: "schemas/blockchain.mol",
+      name: "blockchain.mol",
+      type: "file",
+      content: `// Molecule serialization schema for CKB contract data
+vector Byte <byte>;
+vector Bytes <Byte>;
+
+table HelloRecord {
+    version: byte,
+    author: Bytes,
+    message: Bytes,
+    created_at: Uint64,
+}
+`,
+    },
+    {
+      path: "tests",
+      name: "tests",
+      type: "directory",
+    },
+    {
+      path: "tests/Cargo.toml",
+      name: "Cargo.toml",
+      type: "file",
+      content: `[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+ckb-testtool = "0.6.0"
+ckb-types = "0.118.0"
+`,
+    },
+    {
+      path: "tests/src",
+      name: "src",
+      type: "directory",
+    },
+    {
+      path: "tests/src/tests.rs",
+      name: "tests.rs",
+      type: "file",
+      content: `use ckb_testtool::context::Context;
+use ckb_types::{
+    bytes::Bytes,
+    core::TransactionBuilder,
+    packed::*,
+    prelude::*,
+};
+
+#[test]
+fn test_hello_world_success() {
+    let mut context = Context::default();
+    let contract_bin: Bytes = Loader::default().load_binary("hello-world");
+    let out_point = context.deploy_cell(contract_bin);
+
+    let lock_script = context
+        .build_script(&out_point, Default::default())
+        .expect("script");
+
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+
+    let tx = TransactionBuilder::default()
+        .input(CellInput::new_builder().previous_output(input_out_point).build())
+        .build();
+
+    let cycles = context.verify_tx(&tx, 10_000_000).expect("pass verification");
+    println!("Consumed cycles: {}", cycles);
+}
+`,
+    },
+    {
+      path: "capsule.toml",
+      name: "capsule.toml",
+      type: "file",
+      content: `[rust]
+workspace_dir = "."
+contracts = ["contracts/hello-world"]
+`,
+    },
+    {
+      path: "frontend",
+      name: "frontend",
+      type: "directory",
+    },
+    {
+      path: "frontend/index.html",
+      name: "index.html",
+      type: "file",
+      content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Corven DApp Frontend</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div class="badge">LIVE FRONTEND</div>
+      <h1>CKB Contract Web Client</h1>
+      <p>Interactive frontend application connected to your local CKB Devnet node & Fiber services.</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="label">Devnet Status</span>
+        <span class="value online">Online (24ms)</span>
+      </div>
+      <div class="stat-card">
+        <span class="label">Local Balance</span>
+        <span class="value" id="wallet-balance">2,500.00 CKB</span>
+      </div>
+    </div>
+
+    <div class="action-box">
+      <button id="btn-interact" class="btn primary">Call hello-world Contract</button>
+      <button id="btn-faucet" class="btn secondary">Claim 500 CKB Faucet</button>
+    </div>
+
+    <div class="terminal-log" id="console-output">
+      [00:00:00] Frontend loaded. Ready to interact with CKB contracts.
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>`,
+    },
+    {
+      path: "frontend/style.css",
+      name: "style.css",
+      type: "file",
+      content: `body {
+  margin: 0;
+  padding: 2rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #101419;
+  color: #e0e2ea;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.card {
+  max-width: 580px;
+  width: 100%;
+  background: #1c2025;
+  border: 1px solid #3c4a42;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  background: rgba(78, 222, 163, 0.1);
+  border: 1px solid rgba(78, 222, 163, 0.3);
+  color: #4edea3;
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+  color: #e0e2ea;
+}
+
+p {
+  margin: 0 0 1.5rem;
+  font-size: 0.85rem;
+  color: #bbcabf;
+  line-height: 1.5;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-card {
+  background: #181c21;
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid #31353b;
+}
+
+.stat-card .label {
+  display: block;
+  font-size: 0.75rem;
+  color: #86948a;
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  font-family: monospace;
+}
+
+.stat-card .value {
+  font-size: 1.1rem;
+  font-weight: bold;
+  font-family: monospace;
+  color: #4cd7f6;
+}
+
+.stat-card .value.online {
+  color: #4edea3;
+}
+
+.action-box {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.btn.primary {
+  background: #4edea3;
+  color: #003824;
+}
+
+.btn.secondary {
+  background: #262a30;
+  color: #e0e2ea;
+  border: 1px solid #3c4a42;
+}
+
+.terminal-log {
+  background: #0a0e13;
+  border: 1px solid #31353b;
+  border-radius: 8px;
+  padding: 0.85rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #bbcabf;
+  line-height: 1.6;
+  max-height: 120px;
+  overflow-y: auto;
+}`,
+    },
+    {
+      path: "frontend/app.js",
+      name: "app.js",
+      type: "file",
+      content: `// Corven Frontend Client
+let currentBalance = 2500;
+
+function logMessage(msg) {
+  const time = new Date().toLocaleTimeString();
+  const output = document.getElementById("console-output");
+  if (output) {
+    output.innerText += \`\\n[\${time}] \${msg}\`;
+    output.scrollTop = output.scrollHeight;
+  }
+  console.log(msg);
+}
+
+document.getElementById("btn-interact")?.addEventListener("click", () => {
+  logMessage("Calling smart contract via CKB RPC...");
+  setTimeout(() => {
+    logMessage("Tx verification passed! Cycles consumed: 8,420.");
+  }, 400);
+});
+
+document.getElementById("btn-faucet")?.addEventListener("click", () => {
+  currentBalance += 500;
+  const balanceEl = document.getElementById("wallet-balance");
+  if (balanceEl) balanceEl.innerText = \`\${currentBalance.toLocaleString()}.00 CKB\`;
+  logMessage("Claimed 500 CKB from local Devnet faucet.");
+});
+`,
+    },
+    {
+      path: "README.md",
+      name: "README.md",
+      type: "file",
+      content: `# CKB Smart Contract Workspace
+
+Welcome to your Corven CKB RISC-V workspace!
+
+## Features
+- **Contract Source:** \`contracts/hello-world/src/main.rs\`
+- **Molecule Schema:** \`schemas/blockchain.mol\`
+- **Integration Tests:** \`tests/src/tests.rs\`
+
+Click **Build** to compile your contract, **Test** to run tests, and **Deploy** to publish to your private devnet.
+`,
+    },
+  ],
+};
+
+let workspaces: any[] = [
+  {
+    id: "ws-default",
+    name: "My First CKB Contract",
+    status: "RUNNING",
+    userId: TEST_USER.id,
+    templateId: "hello-world",
+    runtimeNetwork: "corven-net-default",
+    runtimeVolume: "corven-vol-default",
+    lastStartedAt: new Date().toISOString(),
+    lastStoppedAt: null,
+    lastActivityAt: new Date().toISOString(),
+    provisionStage: null,
+    provisionError: null,
+    createdAt: new Date(Date.now() - 3600000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+let workspaceFiles: Record<string, WorkspaceFileRecord[]> = {
+  ...DEFAULT_WORKSPACE_FILES,
+};
+
+// ---------------------------------------------------------------------------
+// Devnet & Community & Debugger State
+// ---------------------------------------------------------------------------
+
+let devnetBlocks: any[] = [
+  {
+    number: 14892,
+    hash: "0x8fa12c9034b120efcd432a901832049182309481203948120938410293840192",
+    transactions: 3,
+    timestamp: Date.now() - 4000,
+    miner: TEST_USER.walletAddress,
+  },
+  {
+    number: 14891,
+    hash: "0x3918401928340192834019283401928340192834019283401928340192834019",
+    transactions: 1,
+    timestamp: Date.now() - 19000,
+    miner: TEST_USER.walletAddress,
+  },
+  {
+    number: 14890,
+    hash: "0x7721094812039481203948120394812039481203948120394812039481203948",
+    transactions: 2,
+    timestamp: Date.now() - 38000,
+    miner: TEST_USER.walletAddress,
+  },
+];
+
+let communityPosts: any[] = [
+  {
+    id: "post-1",
+    kind: "NEWS",
+    title: "Corven IDE v1.2 Released with RISC-V CKB Compiler & Devnet Debugger",
+    body: "We are thrilled to announce Corven IDE v1.2! This release introduces integrated in-browser CKB terminal sessions, Molecule schema code generation, and single-click devnet contract verification.",
+    status: "DONE",
+    pinned: true,
+    voteCount: 42,
+    votedByMe: true,
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    author: { id: "user-admin", name: "Corven Core Team", walletAddress: null, isAdmin: true },
+    comments: [
+      {
+        id: "c-1",
+        body: "The devnet transaction replay feature saves so much debugging time. Amazing work!",
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+        author: { id: "user-2", name: "SatoshiCKB", walletAddress: "ckt1q...839f", isAdmin: false },
+      },
+    ],
+  },
+  {
+    id: "post-2",
+    kind: "PROPOSAL",
+    title: "Support for custom RISC-V compiler target optimization flags",
+    body: "Proposal to allow developers to configure `-C opt-level=s` or `-C target-feature=+a` directly in the Workspace Build Settings panel.",
+    status: "PLANNED",
+    pinned: false,
+    voteCount: 19,
+    votedByMe: false,
+    createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
+    updatedAt: new Date(Date.now() - 86400000 * 4).toISOString(),
+    author: { id: TEST_USER.id, name: TEST_USER.name, walletAddress: TEST_USER.walletAddress, isAdmin: false },
+    comments: [],
+  },
+];
+
+let recentDebugTransactions = [
+  {
+    txHash: "0x89fc3218de902bf8912cdfa1098234ea01923847bcda89127394812903847120",
+    recordedAt: new Date(Date.now() - 120000).toISOString(),
+    status: "committed",
+  },
+  {
+    txHash: "0x3312984abce91028374981729384719283749182374981273948172938471928",
+    recordedAt: new Date(Date.now() - 600000).toISOString(),
+    status: "committed",
+  },
+];
+
+let workspaceDeployments: any[] = [
+  {
+    id: "dep-1",
+    workspaceId: "ws-default",
+    network: "DEVNET",
+    contractName: "hello-world",
+    txHash: "0x89fc3218de902bf8912cdfa1098234ea01923847bcda89127394812903847120",
+    outputIndex: 0,
+    codeHash: "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8",
+    hashType: "type",
+    typeId: null,
+    typeArgs: null,
+    dataHash: "0x321f8a892bce901...321",
+    sizeBytes: 32768,
+    capacity: "10000000000",
+    deployerAddress: TEST_USER.walletAddress,
+    upgradeOfId: null,
+    createdAt: new Date(Date.now() - 120000).toISOString(),
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Node Simulator State
+// ---------------------------------------------------------------------------
+
+let nodeStatus: "Operational" | "Restarting" | "Resetting" | "Synchronizing" = "Operational";
+let blockHeight = 14892;
+let peers: any[] = [];
+
+let nodeLogs = [
+  `[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: CKB Node service initialized (v0.118.0)`,
+  `[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: RPC endpoint listening on port 8114`,
+  `[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: P2P network stack online. Awaiting peer connections.`,
+];
+
+// ---------------------------------------------------------------------------
+// Helper functions
+// ---------------------------------------------------------------------------
+
+function formatRuntimeStatus(workspace: any) {
+  return {
+    workspaceId: workspace.id,
+    name: workspace.name,
+    status: workspace.status,
+    provisionStage: workspace.provisionStage,
+    provisionError: workspace.provisionError,
+    lastStartedAt: workspace.lastStartedAt,
+    lastStoppedAt: workspace.lastStoppedAt,
+    lastActivityAt: workspace.lastActivityAt,
+    filesAvailable: true,
+    idleTimeoutMinutes: 60,
+    devnetMode: "lazy",
+    hostId: "corven-local-runner",
+    hostOnline: true,
+    containers: [
+      {
+        id: `c-ide-${workspace.id}`,
+        containerId: `docker-${workspace.id}-ide`,
+        name: `${workspace.name}-ide`,
+        image: "corvenide/rust-riscv-ckb:latest",
+        type: "IDE",
+        status: workspace.status === "RUNNING" ? "RUNNING" : "STOPPED",
+        dockerState: workspace.status === "RUNNING" ? "running" : "exited",
+        dockerStatus: workspace.status === "RUNNING" ? "Up 2 hours" : "Exited (0)",
+        internalPort: 8000,
+        hostPort: 8000,
+      },
+      {
+        id: `c-node-${workspace.id}`,
+        containerId: `docker-${workspace.id}-ckb`,
+        name: `${workspace.name}-ckb`,
+        image: "nervos/ckb:v0.118.0",
+        type: "CKB_NODE",
+        status: workspace.status === "RUNNING" ? "RUNNING" : "STOPPED",
+        dockerState: workspace.status === "RUNNING" ? "running" : "exited",
+        dockerStatus: workspace.status === "RUNNING" ? "Up 2 hours" : "Exited (0)",
+        internalPort: 8114,
+        hostPort: 8114,
+      },
+    ],
+  };
+}
+
 let geminiClient: GoogleGenAI | null = null;
-function getGemini(): GoogleGenAI {
+function getGemini(): GoogleGenAI | null {
   if (!geminiClient) {
     const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("GEMINI_API_KEY environment variable is required");
-    }
+    if (!key) return null;
     geminiClient = new GoogleGenAI({
       apiKey: key,
       httpOptions: {
         headers: {
           "User-Agent": "aistudio-build",
-        }
-      }
+        },
+      },
     });
   }
   return geminiClient;
 }
 
-// In-Memory Virtual File System
-let vfs = [...initialFiles];
+// ---------------------------------------------------------------------------
+// Server Initialization
+// ---------------------------------------------------------------------------
 
-// In-Memory Node Simulator State
-let nodeStatus: 'Operational' | 'Restarting' | 'Resetting' | 'Synchronizing' = 'Operational';
-let blockHeight = 18234012;
-let uptimeSeconds = 1052542; // ~12 days
-let peers = [
-  { id: "fiber-node-99a1", address: "154.22.102.1", latency: 12, region: "US-West", client: "Fiber/v1.0.4" },
-  { id: "ether-sentinel-22", address: "92.11.45.182", latency: 45, region: "EU-Central", client: "Geth/v1.12.0" },
-  { id: "node-berlin-881", address: "201.5.12.99", latency: 102, region: "EU-West", client: "Fiber/v1.0.3" }
-];
-
-let blocks = [
-  {
-    number: 18234012,
-    hash: "0x92fa88e723ab8b2100cbde12c8b093f18eefc8290192a9192bcf72de28394a12",
-    parentHash: "0x14bd99f2eb5cf473bc4102ff93f18ea002d9c02e185cf38bce674839deff6e01",
-    timestamp: new Date().toISOString(),
-    txCount: 3,
-    size: "14.2 KB",
-    gasUsed: 124500,
-    transactions: [
-      "0x92f...a12c8b transferred 1.45 FIBER to 0x14b...f2e",
-      "0xcc4...121 deployed FiberToken contract at 0xf5b...9e1",
-      "0x77d...1bc called 'mint' on 0xf5b...9e1 (25,000,000 Token)"
-    ]
-  },
-  {
-    number: 18234011,
-    hash: "0x14bd99f2eb5cf473bc4102ff93f18ea002d9c02e185cf38bce674839deff6e01",
-    parentHash: "0xcc4918e9d22cc615006693000a121bfda93eef250009ac1e4dff8a7a8fbc0311",
-    timestamp: new Date(Date.now() - 12000).toISOString(),
-    txCount: 1,
-    size: "8.4 KB",
-    gasUsed: 21000,
-    transactions: [
-      "0x14b...f2e transferred 0.12 FIBER to 0x77d...1bc"
-    ]
-  },
-  {
-    number: 18234010,
-    hash: "0xcc4918e9d22cc615006693000a121bfda93eef250009ac1e4dff8a7a8fbc0311",
-    parentHash: "0x77d8811bc917af5299fa00a112cd9e8c3b4cf7f2898991bc2e89fa3c4cf7f2aa",
-    timestamp: new Date(Date.now() - 24000).toISOString(),
-    txCount: 2,
-    size: "11.6 KB",
-    gasUsed: 62000,
-    transactions: [
-      "0xcc4...121 transferred 50.00 FIBER to 0x88f...f23",
-      "0x88f...f23 initialized staking pool for 1,000 FIBER"
-    ]
-  },
-  {
-    number: 18234009,
-    hash: "0x77d8811bc917af5299fa00a112cd9e8c3b4cf7f2898991bc2e89fa3c4cf7f2aa",
-    parentHash: "0x28991bc2e89fa3c4cf7f2a1b9d10e0ddccff00a112cd9e8c3b4cf7f289ab7234",
-    timestamp: new Date(Date.now() - 36000).toISOString(),
-    txCount: 0,
-    size: "4.1 KB",
-    gasUsed: 0,
-    transactions: []
-  }
-];
-
-let nodeLogs = [
-  `[${new Date().toISOString().slice(0, 10)} 14:21:40] INFO: Initializing P2P network...`,
-  `[${new Date().toISOString().slice(0, 10)} 14:21:42] INFO: Connected to beacon node at 127.0.0.1:9000`,
-  `[${new Date().toISOString().slice(0, 10)} 14:21:45] WARN: Reorg detected at depth 2, resolving...`,
-  `[${new Date().toISOString().slice(0, 10)} 14:21:50] SUCCESS: Canonical chain tip updated to 18,234,011`,
-  `[${new Date().toISOString().slice(0, 10)} 14:21:55] INFO: Broadcasted transaction 0x12...ff0 to 24 peers`,
-  `[${new Date().toISOString().slice(0, 10)} 14:22:00] INFO: Received new block #18,234,012 from peer 154.22.102.1`,
-  `[${new Date().toISOString().slice(0, 10)} 14:22:02] INFO: Validating signatures for block #18,234,012`,
-  `[${new Date().toISOString().slice(0, 10)} 14:22:04] SUCCESS: Canonical chain tip updated to 18,234,012`
-];
-
-let metrics = {
-  cpu: 12,
-  memory: "1.4GB",
-  network: 42,
-  bandwidth: "89 Mbps"
-};
-
-const registeredUsers = [
-  { email: "john@fiberdev.io", username: "johndoe", password: "password123", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=johndoe", provider: "credentials" }
-];
-let currentUserSession: any = null;
-
-// Start Server Loop
 async function startServer() {
   const app = express();
   const PORT = 3000;
+  const httpServer = http.createServer(app);
 
-  app.use(express.json());
+  app.use(express.json({ limit: "25mb" }));
 
-  // Block generation loop in background
-  setInterval(() => {
-    uptimeSeconds += 4;
-    if (nodeStatus === 'Operational' || nodeStatus === 'Synchronizing') {
-      // 35% chance of generating a block every 4 seconds
-      if (Math.random() < 0.35) {
-        blockHeight++;
-        const txCount = Math.floor(Math.random() * 5);
-        const sizeKb = (Math.random() * 20 + 3).toFixed(1);
-        const gasUsed = txCount * 21000 + Math.floor(Math.random() * 100000);
-        const hash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-        const parentHash = blocks[0]?.hash || "0x77d8811bc917af5299fa00a112cd9e8c3b4cf7f2898991bc2e89fa3c4cf7f2aa";
-
-        const possibleTxs = [
-          `0x${hash.slice(2, 5)}...${hash.slice(-4)} transferred ${(Math.random() * 10).toFixed(2)} FIBER`,
-          `0x${hash.slice(6, 9)}...${hash.slice(-5)} updated contract state`,
-          `0x${hash.slice(10, 13)}...${hash.slice(-3)} triggered event 'Transfer'`,
-          `0x${hash.slice(3, 6)}...${hash.slice(-4)} called FiberToken 'mint'`
-        ];
-
-        const txs = Array.from({ length: txCount }, () => possibleTxs[Math.floor(Math.random() * possibleTxs.length)]);
-
-        const newBlock = {
-          number: blockHeight,
-          hash,
-          parentHash,
-          timestamp: new Date().toISOString(),
-          txCount,
-          size: `${sizeKb} KB`,
-          gasUsed,
-          transactions: txs
-        };
-
-        blocks.unshift(newBlock);
-        if (blocks.length > 50) blocks.pop();
-
-        nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Canonical chain tip updated to ${blockHeight} (hash: ${hash.slice(0, 12)}...)`);
-        if (nodeLogs.length > 200) nodeLogs.shift();
-      }
-
-      // Fluctuating Metrics
-      metrics.cpu = Math.floor(Math.random() * 25) + 8; // 8% - 33%
-      metrics.network = Math.floor(Math.random() * 40) + 30; // 30% - 70%
-      const rawMem = (Math.random() * 0.3 + 1.3).toFixed(1);
-      metrics.memory = `${rawMem}GB`;
+  // CORS headers - Fully compliant with AI Studio Preview and browser credentials
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      // Must return the specific origin when credentials are included
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.header("Access-Control-Allow-Origin", "*");
     }
-  }, 4000);
 
-  // Health route
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", nodeStatus, blockHeight });
+    res.header(
+      "Access-Control-Allow-Headers",
+      (req.headers["access-control-request-headers"] as string) ||
+      "Authorization, Content-Type, Accept, X-Requested-With, Origin, Range, Cache-Control, Pragma, X-Client-Version, baggage, sentry-trace, x-api-key, x-workspace-id"
+    );
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.header("Access-Control-Expose-Headers", "Content-Length, Content-Range, Content-Type, Authorization, X-Total-Count");
+    res.header("Access-Control-Max-Age", "86400");
+    res.header("Access-Control-Allow-Private-Network", "true");
+    res.header("Vary", "Origin, Access-Control-Request-Headers");
+
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+    next();
   });
 
-  // Authenticaton Endpoints
-  app.post("/api/auth/signup", (req, res) => {
-    const { email, username, password } = req.body;
-    if (!email || !username || !password) {
-      return res.status(400).json({ error: "All fields are required" });
-    }
-    const exists = registeredUsers.some(u => u.email === email || u.username === username);
-    if (exists) {
-      return res.status(400).json({ error: "User with this email or username already exists" });
-    }
-    const newUser = {
-      email,
-      username,
-      password,
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}`,
-      provider: "credentials"
+  app.options("*", (_req, res) => {
+    res.status(204).end();
+  });
+
+  // Diagnostic endpoint to test CORS connectivity from Gemini Studio Preview
+  app.get("/api/cors-check", (req, res) => {
+    const origin = (req.headers.origin as string) || null;
+    res.json({
+      success: true,
+      origin,
+      host: req.headers.host || null,
+      isAiStudioPreview:
+        origin?.includes("run.app") ||
+        origin?.includes("googleusercontent.com") ||
+        origin?.includes("aistudio") ||
+        false,
+      credentialsAllowed: true,
+      allowedMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+      serverTime: new Date().toISOString(),
+    });
+  });
+
+  // Background tick for node uptime
+  // No fake mock blocks: blocks are only recorded when transactions or devnet operations occur
+
+  // -------------------------------------------------------------------------
+  // Auth Endpoints
+  // -------------------------------------------------------------------------
+
+  app.post("/api/auth/wallet/challenge", (req, res) => {
+    const { walletAddress } = req.body || {};
+    const challengeId = `chal-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const message = `Sign in to Corven IDE\nWallet: ${walletAddress || TEST_USER.walletAddress}\nNonce: ${challengeId}\nIssued At: ${new Date().toISOString()}`;
+    res.json({ challengeId, message });
+  });
+
+  app.post("/api/auth/wallet/login", (req, res) => {
+    const { walletAddress } = req.body || {};
+    const user = {
+      ...TEST_USER,
+      walletAddress: walletAddress || TEST_USER.walletAddress,
     };
-    registeredUsers.push(newUser);
-    currentUserSession = { email: newUser.email, username: newUser.username, avatar: newUser.avatar, provider: "credentials" };
-    res.json({ success: true, user: currentUserSession });
+    const token = generateAccessToken(user.id);
+    res.cookie("corven_refresh", token, { httpOnly: true, secure: true, sameSite: "none" });
+    res.json({
+      accessToken: token,
+      user,
+    });
   });
 
-  app.post("/api/auth/login", (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
-    }
-    const user = registeredUsers.find(u => u.email === email && u.password === password);
-    if (!user) {
-      return res.status(400).json({ error: "Invalid email or password" });
-    }
-    currentUserSession = { email: user.email, username: user.username, avatar: user.avatar, provider: user.provider };
-    res.json({ success: true, user: currentUserSession });
+  app.get("/api/auth/me", (_req, res) => {
+    res.json(TEST_USER);
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    currentUserSession = null;
+  app.post("/api/auth/refresh", (_req, res) => {
+    const token = generateAccessToken(TEST_USER.id);
+    res.json({
+      accessToken: token,
+      user: TEST_USER,
+    });
+  });
+
+  app.post(["/api/auth/logout", "/api/auth/logout-all"], (_req, res) => {
+    res.clearCookie("corven_refresh");
     res.json({ success: true });
   });
 
-  app.get("/api/auth/me", (req, res) => {
-    res.json({ user: currentUserSession });
+  app.post("/api/auth/login", (req, res) => {
+    const token = generateAccessToken(TEST_USER.id);
+    res.json({ success: true, accessToken: token, user: TEST_USER });
   });
 
-  app.get("/api/auth/github/url", (req, res) => {
-    if (process.env.GITHUB_CLIENT_ID) {
-      const redirectUri = `${req.protocol}://${req.get('host')}/auth/callback`;
-      const params = new URLSearchParams({
-        client_id: process.env.GITHUB_CLIENT_ID,
-        redirect_uri: redirectUri,
-        scope: 'read:user user:email',
-      });
-      res.json({ url: `https://github.com/login/oauth/authorize?${params}` });
-    } else {
-      res.json({ url: "/api/auth/github/popup-simulator" });
+  app.post("/api/auth/signup", (req, res) => {
+    const token = generateAccessToken(TEST_USER.id);
+    res.json({ success: true, accessToken: token, user: TEST_USER });
+  });
+
+  // -------------------------------------------------------------------------
+  // Workspace Templates & Workspaces Endpoints
+  // -------------------------------------------------------------------------
+
+  app.get("/api/workspace-templates", (_req, res) => {
+    res.json(TEMPLATES);
+  });
+
+  app.get("/api/workspaces", (_req, res) => {
+    res.json(workspaces);
+  });
+
+  app.post("/api/workspaces", (req, res) => {
+    const { name, templateId } = req.body || {};
+    if (!name) {
+      return res.status(400).json({ message: ["name should not be empty"] });
     }
-  });
 
-  app.get("/api/auth/github/popup-simulator", (req, res) => {
-    res.send(`
-      <html>
-        <head>
-          <title>Sign in to GitHub · GitHub</title>
-          <style>
-            body {
-              background-color: #0d1117;
-              color: #c9d1d9;
-              font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
-              font-size: 14px;
-              line-height: 1.5;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              height: 100vh;
-              margin: 0;
-            }
-            .box {
-              background-color: #161b22;
-              border: 1px solid #30363d;
-              border-radius: 6px;
-              width: 340px;
-              padding: 24px;
-              box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            }
-            .logo {
-              text-align: center;
-              margin-bottom: 24px;
-            }
-            .logo svg {
-              fill: #f0f6fc;
-            }
-            h1 {
-              font-size: 24px;
-              font-weight: 300;
-              letter-spacing: -0.5px;
-              text-align: center;
-              margin: 0 0 20px 0;
-              color: #f0f6fc;
-            }
-            label {
-              display: block;
-              margin-bottom: 8px;
-              font-weight: 400;
-              color: #f0f6fc;
-            }
-            input[type="text"], input[type="password"] {
-              width: 100%;
-              padding: 5px 12px;
-              font-size: 14px;
-              line-height: 20px;
-              color: #c9d1d9;
-              background-color: #0d1117;
-              border: 1px solid #30363d;
-              border-radius: 6px;
-              box-sizing: border-box;
-              margin-bottom: 15px;
-            }
-            input[type="text"]:focus {
-              border-color: #58a6ff;
-              outline: none;
-              box-shadow: 0 0 0 3px rgba(56,139,253,0.3);
-            }
-            .btn {
-              color: #ffffff;
-              background-color: #238636;
-              border: 1px solid rgba(240,246,252,0.1);
-              border-radius: 6px;
-              padding: 5px 16px;
-              font-size: 14px;
-              font-weight: 500;
-              line-height: 20px;
-              white-space: nowrap;
-              vertical-align: middle;
-              cursor: pointer;
-              width: 100%;
-              box-sizing: border-box;
-            }
-            .btn:hover {
-              background-color: #2ea043;
-            }
-            .desc {
-              font-size: 11px;
-              color: #8b949e;
-              margin-top: 15px;
-              text-align: center;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="box">
-            <div class="logo">
-              <svg height="48" viewBox="0 0 16 16" version="1.1" width="48" aria-hidden="true"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
-            </div>
-            <h1>Authorize Studio App</h1>
-            <form action="/auth/callback" method="GET">
-              <label for="login_field">Simulated Username</label>
-              <input type="text" name="username" id="login_field" value="github-coder" required />
-              
-              <label for="email_field">Simulated Email</label>
-              <input type="text" name="email" id="email_field" value="developer@github.com" required />
-              
-              <button class="btn" type="submit">Authorize & Continue</button>
-            </form>
-            <div class="desc">
-              FiberDev Studio Developer Sandbox. This is an interactive mockup of GitHub OAuth authorization.
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
-  });
-
-  app.get(["/auth/callback", "/auth/callback/"], (req, res) => {
-    const { username, email } = req.query;
-
-    const userNameStr = (username as string) || "github-coder";
-    const emailStr = (email as string) || "coder@github.com";
-
-    currentUserSession = {
-      email: emailStr,
-      username: userNameStr,
-      avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(userNameStr)}`,
-      provider: "github"
+    const id = `ws-${Date.now().toString(36)}`;
+    const newWs = {
+      id,
+      name,
+      status: "RUNNING",
+      userId: TEST_USER.id,
+      templateId: templateId || "hello-world",
+      runtimeNetwork: `corven-net-${id}`,
+      runtimeVolume: `corven-vol-${id}`,
+      lastStartedAt: new Date().toISOString(),
+      lastStoppedAt: null,
+      lastActivityAt: new Date().toISOString(),
+      provisionStage: null,
+      provisionError: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    if (!registeredUsers.some(u => u.email === emailStr)) {
-      registeredUsers.push({
-        email: emailStr,
-        username: userNameStr,
-        password: "oauth-password-secured",
-        avatar: currentUserSession.avatar,
-        provider: "github"
+    workspaces.push(newWs);
+
+    // Seed files from default template
+    workspaceFiles[id] = (DEFAULT_WORKSPACE_FILES["ws-default"] || []).map((f) => ({ ...f }));
+
+    res.status(201).json(newWs);
+  });
+
+  app.get("/api/workspaces/:id", (req, res) => {
+    const ws = workspaces.find((w) => w.id === req.params.id);
+    if (!ws) return res.status(404).json({ message: "Workspace not found" });
+    res.json(ws);
+  });
+
+  app.delete("/api/workspaces/:id", (req, res) => {
+    workspaces = workspaces.filter((w) => w.id !== req.params.id);
+    delete workspaceFiles[req.params.id];
+    res.json({ success: true });
+  });
+
+  app.post("/api/workspaces/:id/start", (req, res) => {
+    const ws = workspaces.find((w) => w.id === req.params.id);
+    if (ws) {
+      ws.status = "RUNNING";
+      ws.lastStartedAt = new Date().toISOString();
+      ws.lastActivityAt = new Date().toISOString();
+    }
+    res.status(201).json(formatRuntimeStatus(ws || { id: req.params.id, name: "Workspace", status: "RUNNING" }));
+  });
+
+  app.post("/api/workspaces/:id/stop", (req, res) => {
+    const ws = workspaces.find((w) => w.id === req.params.id);
+    if (ws) {
+      ws.status = "STOPPED";
+      ws.lastStoppedAt = new Date().toISOString();
+    }
+    res.status(201).json(formatRuntimeStatus(ws || { id: req.params.id, name: "Workspace", status: "STOPPED" }));
+  });
+
+  app.get("/api/workspaces/:id/status", (req, res) => {
+    const ws = workspaces.find((w) => w.id === req.params.id);
+    res.json(formatRuntimeStatus(ws || { id: req.params.id, name: "Workspace", status: "RUNNING" }));
+  });
+
+  app.post("/api/workspaces/:id/heartbeat", (req, res) => {
+    const ws = workspaces.find((w) => w.id === req.params.id);
+    if (ws) ws.lastActivityAt = new Date().toISOString();
+    res.json({ status: ws?.status || "RUNNING" });
+  });
+
+  // -------------------------------------------------------------------------
+  // Workspace Files Endpoints
+  // -------------------------------------------------------------------------
+
+  function getFiles(workspaceId: string): WorkspaceFileRecord[] {
+    if (!workspaceFiles[workspaceId]) {
+      workspaceFiles[workspaceId] = (DEFAULT_WORKSPACE_FILES["ws-default"] || []).map((f) => ({ ...f }));
+    }
+    return workspaceFiles[workspaceId];
+  }
+
+  app.get("/api/workspaces/:id/files", (req, res) => {
+    const files = getFiles(req.params.id);
+    const entries = files.map((f) => ({
+      name: f.name,
+      path: f.path,
+      type: f.type,
+      size: f.size ?? (f.content ? Buffer.byteLength(f.content) : 0),
+    }));
+    res.json(entries);
+  });
+
+  app.get("/api/workspaces/:id/files/content", (req, res) => {
+    const filePath = req.query.path as string;
+    const files = getFiles(req.params.id);
+    const file = files.find((f) => f.path === filePath);
+    if (!file || file.type !== "file") {
+      return res.status(404).json({ message: "File not found" });
+    }
+    res.json({
+      path: file.path,
+      name: file.name,
+      type: "file",
+      content: file.content || "",
+      size: Buffer.byteLength(file.content || ""),
+    });
+  });
+
+  app.post("/api/workspaces/:id/files", (req, res) => {
+    const { path: filePath, content } = req.body || {};
+    if (!filePath) return res.status(400).json({ message: "path required" });
+    const files = getFiles(req.params.id);
+    const existing = files.find((f) => f.path === filePath);
+    if (existing) {
+      existing.content = content || "";
+      existing.size = Buffer.byteLength(existing.content);
+      return res.json(existing);
+    }
+    const name = filePath.split("/").pop() || filePath;
+    const newFile: WorkspaceFileRecord = {
+      path: filePath,
+      name,
+      type: "file",
+      content: content || "",
+      size: Buffer.byteLength(content || ""),
+    };
+    files.push(newFile);
+    res.status(201).json(newFile);
+  });
+
+  app.put("/api/workspaces/:id/files", (req, res) => {
+    const { path: filePath, content } = req.body || {};
+    const files = getFiles(req.params.id);
+    const file = files.find((f) => f.path === filePath);
+    if (!file) return res.status(404).json({ message: "File not found" });
+    file.content = content ?? "";
+    file.size = Buffer.byteLength(file.content);
+    res.json(file);
+  });
+
+  app.delete("/api/workspaces/:id/files", (req, res) => {
+    const filePath = req.query.path as string;
+    const files = getFiles(req.params.id);
+    workspaceFiles[req.params.id] = files.filter(
+      (f) => f.path !== filePath && !f.path.startsWith(`${filePath}/`)
+    );
+    res.json({ success: true, path: filePath });
+  });
+
+  app.put("/api/workspaces/:id/files/rename", (req, res) => {
+    const { oldPath, newPath } = req.body || {};
+    const files = getFiles(req.params.id);
+    const file = files.find((f) => f.path === oldPath);
+    if (file) {
+      file.path = newPath;
+      file.name = newPath.split("/").pop() || newPath;
+    }
+    // Rename any children if directory
+    files.forEach((f) => {
+      if (f.path.startsWith(`${oldPath}/`)) {
+        f.path = `${newPath}/${f.path.slice(oldPath.length + 1)}`;
+      }
+    });
+    res.json({ success: true });
+  });
+
+  app.post("/api/workspaces/:id/directories", (req, res) => {
+    const { path: dirPath } = req.body || {};
+    const files = getFiles(req.params.id);
+    const name = dirPath.split("/").pop() || dirPath;
+    const dirEntry: WorkspaceFileRecord = {
+      path: dirPath,
+      name,
+      type: "directory",
+    };
+    if (!files.some((f) => f.path === dirPath)) {
+      files.push(dirEntry);
+    }
+    res.status(201).json(dirEntry);
+  });
+
+  // -------------------------------------------------------------------------
+  // Devnet & CKB RPC Endpoints
+  // -------------------------------------------------------------------------
+
+  app.get("/api/workspaces/:id/devnet", (req, res) => {
+    const ws = workspaces.find((w) => w.id === req.params.id);
+    res.json({
+      workspaceId: req.params.id,
+      workspaceName: ws?.name || "Workspace",
+      workspaceStatus: ws?.status || "RUNNING",
+      devnetMode: "lazy",
+      state: "running",
+      chain: {
+        chain: "ckb_devnet",
+        nodeVersion: "v0.118.0",
+        nodeId: "QmCorvenLocalDevnetNode",
+        tip: {
+          number: blockHeight,
+          hash: devnetBlocks[0]?.hash || "0x92fa88e723ab8b2100cbde12c8b093f18eefc8290192a9192bcf72de28394a12",
+          timestamp: Date.now(),
+          epoch: "0x0001000200000000",
+        },
+        txPool: { pending: 1, proposed: 0, orphan: 0 },
+        peers: 3,
+        recentBlocks: devnetBlocks,
+      },
+      rpcUrl: "http://127.0.0.1:8114",
+    });
+  });
+
+  app.post("/api/workspaces/:id/devnet/start", (req, res) => {
+    res.json(formatRuntimeStatus({ id: req.params.id, name: "Workspace", status: "RUNNING" }));
+  });
+
+  app.post("/api/workspaces/:id/devnet/stop", (req, res) => {
+    res.json(formatRuntimeStatus({ id: req.params.id, name: "Workspace", status: "STOPPED" }));
+  });
+
+  app.post("/api/workspaces/:id/devnet/mine", (req, res) => {
+    blockHeight += 1;
+    const newBlock = {
+      number: blockHeight,
+      hash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+      transactions: Math.floor(Math.random() * 3) + 1,
+      timestamp: Date.now(),
+      miner: TEST_USER.walletAddress,
+    };
+    devnetBlocks.unshift(newBlock);
+    if (devnetBlocks.length > 50) devnetBlocks.pop();
+
+    res.json({
+      success: true,
+      block: newBlock,
+      tip: blockHeight,
+      message: `Block #${blockHeight} successfully mined!`,
+    });
+  });
+
+  app.post("/api/workspaces/:id/devnet/faucet", (req, res) => {
+    const { address = TEST_USER.walletAddress, amount = 1000 } = req.body || {};
+    blockHeight += 1;
+    const txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    const newBlock = {
+      number: blockHeight,
+      hash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+      transactions: 1,
+      timestamp: Date.now(),
+      miner: address,
+    };
+    devnetBlocks.unshift(newBlock);
+    if (devnetBlocks.length > 50) devnetBlocks.pop();
+
+    recentDebugTransactions.unshift({
+      txHash,
+      recordedAt: new Date().toISOString(),
+      status: "committed",
+    });
+
+    res.json({
+      success: true,
+      txHash,
+      recipient: address,
+      capacity: `${Number(amount).toLocaleString()} CKB`,
+      blockNumber: blockHeight,
+      message: `Dispensed ${Number(amount).toLocaleString()} CKB to ${address}`,
+    });
+  });
+
+  app.post("/api/workspaces/:id/devnet/rpc", (req, res) => {
+    const { method, params, id = 1 } = req.body || {};
+
+    if (method === "get_tip_block_number") {
+      return res.json({ jsonrpc: "2.0", id, result: `0x${blockHeight.toString(16)}` });
+    }
+    if (method === "get_tip_header") {
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          number: `0x${blockHeight.toString(16)}`,
+          hash: devnetBlocks[0]?.hash || "0x8fa12c9034b120efcd432a901832049182309481203948120938410293840192",
+          parent_hash: devnetBlocks[1]?.hash || "0x3918401928340192834019283401928340192834019283401928340192834019",
+          timestamp: `0x${Date.now().toString(16)}`,
+          epoch: "0x1000200000000",
+          compact_target: "0x1a08a8ac",
+          dao: "0x39989b097ff4794fae758a0b06b9b3e15b22b109b8b093f18eefc8290192a919",
+        },
       });
     }
-
-    res.send(`
-      <html>
-        <body style="background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
-          <div style="text-align: center; border: 1px solid #30363d; padding: 2rem; border-radius: 6px; background-color: #161b22; max-width: 400px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);">
-            <div style="font-size: 40px; margin-bottom: 1rem;">🚀</div>
-            <h2 style="margin: 0 0 10px 0; color: #f0f6fc;">OAuth Connection Complete</h2>
-            <p style="font-size: 13px; color: #8b949e; margin-bottom: 20px;">Successfully linked with GitHub account <strong>${userNameStr}</strong>.</p>
-            <script>
-              if (window.opener) {
-                window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', user: ${JSON.stringify(currentUserSession)} }, '*');
-                window.close();
-              } else {
-                window.location.href = '/';
-              }
-            </script>
-          </div>
-        </body>
-      </html>
-    `);
-  });
-
-  // VFS File Endpoints
-  app.get("/api/files", (req, res) => {
-    res.json(vfs);
-  });
-
-  app.post("/api/files", (req, res) => {
-    const { path: filePath, content } = req.body;
-    if (!filePath) {
-      return res.status(400).json({ error: "File path required" });
+    if (method === "get_blockchain_info") {
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          chain: "ckb_devnet",
+          median_time: `0x${Math.floor(Date.now() / 1000).toString(16)}`,
+          epoch: "0x1000200000000",
+          difficulty: "0x1000",
+          is_initial_block_download: false,
+          alerts: [],
+        },
+      });
     }
-    const idx = vfs.findIndex(f => f.path === filePath);
-    if (idx !== -1) {
-      vfs[idx].content = content;
-      res.json({ success: true, file: vfs[idx] });
+    if (method === "local_node_info") {
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          version: "0.118.0",
+          node_id: "QmCorvenLocalDevnetNode",
+          active: true,
+          addresses: [{ address: "/ip4/127.0.0.1/tcp/8115", score: "0x1" }],
+          connections: "0x3",
+          protocols: [{ id: "0x1", name: "ckb-sync", version: "1" }],
+        },
+      });
+    }
+    if (method === "get_peers") {
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: [
+          {
+            version: "0.118.0",
+            node_id: "QmPeer1NervosP2PNode",
+            addresses: [{ address: "/ip4/127.0.0.1/tcp/8116", score: "0x1" }],
+            is_outbound: true,
+            connected_duration: "0x2a30",
+            last_ping_duration: "0x12",
+          },
+          {
+            version: "0.118.0",
+            node_id: "QmPeer2FiberMeshRelay",
+            addresses: [{ address: "/ip4/127.0.0.1/tcp/8117", score: "0x1" }],
+            is_outbound: false,
+            connected_duration: "0x1f40",
+            last_ping_duration: "0x18",
+          },
+        ],
+      });
+    }
+    if (method === "get_raw_tx_pool") {
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          pending: recentDebugTransactions.slice(0, 3).map((t) => t.txHash),
+          proposed: [],
+        },
+      });
+    }
+    if (method === "send_transaction") {
+      const txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+      recentDebugTransactions.unshift({
+        txHash,
+        recordedAt: new Date().toISOString(),
+        status: "committed",
+      });
+      return res.json({ jsonrpc: "2.0", id, result: txHash });
+    }
+    // Default response
+    res.json({ jsonrpc: "2.0", id, result: "0x0" });
+  });
+
+  app.get("/api/workspaces/:id/devnet/accounts", (_req, res) => {
+    res.json([
+      {
+        address: TEST_USER.walletAddress,
+        privkey: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        capacityCkb: "100,000",
+        cellsCount: 5,
+        type: "genesis_miner",
+      },
+      {
+        address: "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqt432u08nffj3l9a93l23p40",
+        privkey: "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        capacityCkb: "50,000",
+        cellsCount: 2,
+        type: "test_faucet",
+      },
+    ]);
+  });
+
+  app.get("/api/workspaces/:id/devnet/scripts", (_req, res) => {
+    res.json({
+      secp256k1_blake160_sighash_all: {
+        codeHash: "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8",
+        hashType: "type",
+        cellDep: {
+          outPoint: {
+            txHash: "0x89fc3218de902bf8912cdfa1098234ea01923847bcda89127394812903847120",
+            index: 0,
+          },
+          depType: "depGroup",
+        },
+      },
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Contracts, Deployments, Debugger, Molecule
+  // -------------------------------------------------------------------------
+
+  app.get("/api/workspaces/:id/contracts", (_req, res) => {
+    res.json([
+      {
+        name: "hello-world",
+        sizeBytes: 32768,
+        builtAt: new Date(Date.now() - 3600000).toISOString(),
+      },
+    ]);
+  });
+
+  app.get("/api/workspaces/:id/contracts/:name/binary", (req, res) => {
+    const dummyRiscv = Buffer.from("CORVEN_RISCV_BINARY_STUB_CKB");
+    res.json({
+      name: req.params.name,
+      base64: dummyRiscv.toString("base64"),
+      sizeBytes: dummyRiscv.length,
+    });
+  });
+
+  app.get("/api/workspaces/:id/deployments", (req, res) => {
+    res.json(workspaceDeployments.filter((d) => d.workspaceId === req.params.id));
+  });
+
+  app.post("/api/workspaces/:id/deployments/devnet", (req, res) => {
+    const { contract, upgradable } = req.body || {};
+    const txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    const codeHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    const dep = {
+      id: `dep-${Date.now()}`,
+      workspaceId: req.params.id,
+      network: "DEVNET",
+      contractName: contract || "hello-world",
+      txHash,
+      outputIndex: 0,
+      codeHash,
+      hashType: upgradable ? "type" : "data1",
+      typeId: upgradable ? "0x" + Array.from({ length: 64 }, () => "f").join("") : null,
+      typeArgs: null,
+      dataHash: "0x1234567890abcdef",
+      sizeBytes: 32768,
+      capacity: "10000000000",
+      deployerAddress: TEST_USER.walletAddress,
+      upgradeOfId: null,
+      createdAt: new Date().toISOString(),
+    };
+    workspaceDeployments.unshift(dep);
+    res.status(201).json(dep);
+  });
+
+  app.post("/api/workspaces/:id/deployments", (req, res) => {
+    const body = req.body || {};
+    const dep = {
+      id: `dep-${Date.now()}`,
+      workspaceId: req.params.id,
+      createdAt: new Date().toISOString(),
+      ...body,
+    };
+    workspaceDeployments.unshift(dep);
+    res.status(201).json(dep);
+  });
+
+  app.post(["/api/workspaces/:id/molecule/generate", "/api/molecule/generate"], (req, res) => {
+    const { language = "rust" } = req.body || {};
+    const sampleCode =
+      language === "rust"
+        ? `// Generated by Corven Molecule Compiler
+use molecule::prelude::*;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HelloRecord {
+    pub version: u8,
+    pub author: Vec<u8>,
+    pub message: Vec<u8>,
+    pub created_at: u64,
+}
+`
+        : `// Generated TypeScript Molecule Bindings
+export interface HelloRecord {
+    version: number;
+    author: Uint8Array;
+    message: Uint8Array;
+    createdAt: bigint;
+}
+`;
+    res.json({ success: true, code: sampleCode, language });
+  });
+
+  app.get("/api/workspaces/:id/debug/transactions", (_req, res) => {
+    res.json(recentDebugTransactions);
+  });
+
+  app.post("/api/workspaces/:id/debug/run", (req, res) => {
+    const { contract } = req.body || {};
+    res.json({
+      contract: contract || "hello-world",
+      exitCode: 0,
+      vmError: null,
+      cycles: 12540,
+      logs: [
+        "[DEBUG] Loading script arguments...",
+        "[DEBUG] Invoking hello-world entry verification",
+        "[DEBUG] Validated signature witness: SUCCESS",
+        "[DEBUG] Execution cycles: 12,540 / 70,000,000",
+      ],
+      meaning: "Contract validation passed successfully with exit code 0",
+      raw: "DEBUG: verification finished without errors",
+      note: "All cell outputs conform to protocol rules",
+    });
+  });
+
+  app.post("/api/workspaces/:id/debug/tx", (req, res) => {
+    const { txHash } = req.body || {};
+    res.json({
+      txHash: txHash || recentDebugTransactions[0]?.txHash,
+      status: "committed",
+      inputs: 1,
+      outputs: 2,
+      totalCycles: 28410,
+      failed: 0,
+      groups: [
+        {
+          label: "hello-world Lock Script",
+          groupType: "lock",
+          cellType: "input",
+          cellIndex: 0,
+          codeHash: "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8",
+          hashType: "type",
+          args: "0x",
+          name: "hello-world",
+          contract: "hello-world",
+          replaced: false,
+          skipped: null,
+          exitCode: 0,
+          vmError: null,
+          cycles: 28410,
+          logs: ["[DEBUG] Lock verification OK"],
+          meaning: "Script passed",
+        },
+      ],
+      truncated: false,
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Community Endpoints
+  // -------------------------------------------------------------------------
+
+  app.get("/api/community/permissions", (_req, res) => {
+    res.json({ isAdmin: true });
+  });
+
+  app.get("/api/community/posts", (req, res) => {
+    const { kind, sort } = req.query as { kind?: string; sort?: string };
+    let filtered = communityPosts.filter((p) => (!kind ? p.kind !== "NEWS" : p.kind === kind));
+    if (sort === "top") {
+      filtered = [...filtered].sort((a, b) => b.voteCount - a.voteCount);
     } else {
-      // Create new file
-      const name = filePath.split("/").pop() || filePath;
-      const ext = name.split(".").pop() || "go";
-      const newFile = { path: filePath, name, content, language: ext === 'go' ? 'go' : ext === 'md' ? 'markdown' : 'go' };
-      vfs.push(newFile);
-      res.json({ success: true, file: newFile });
+      filtered = [...filtered].sort((a, b) => Number(b.pinned) - Number(a.pinned));
     }
+    const shaped = filtered.map(({ comments, ...rest }) => ({
+      ...rest,
+      commentCount: comments?.length || 0,
+    }));
+    res.json({ posts: shaped, total: shaped.length, nextOffset: null });
   });
 
-  // Node State Endpoints
-  app.get("/api/node", (req, res) => {
-    // Format Uptime
+  app.post("/api/community/posts", (req, res) => {
+    const { kind, title, body } = req.body || {};
+    const newPost = {
+      id: `post-${Date.now()}`,
+      kind: kind || "FEEDBACK",
+      title: title || "Untitled",
+      body: body || "",
+      status: "OPEN",
+      pinned: false,
+      voteCount: 1,
+      votedByMe: true,
+      commentCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      author: { id: TEST_USER.id, name: TEST_USER.name, walletAddress: TEST_USER.walletAddress, isAdmin: true },
+      comments: [],
+    };
+    communityPosts.unshift(newPost);
+    res.status(201).json(newPost);
+  });
+
+  app.get("/api/community/posts/:id", (req, res) => {
+    const post = communityPosts.find((p) => p.id === req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    res.json({ ...post, commentCount: post.comments.length });
+  });
+
+  app.post("/api/community/posts/:id/comments", (req, res) => {
+    const post = communityPosts.find((p) => p.id === req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    const comment = {
+      id: `comm-${Date.now()}`,
+      body: req.body?.body || "",
+      createdAt: new Date().toISOString(),
+      author: { id: TEST_USER.id, name: TEST_USER.name, walletAddress: TEST_USER.walletAddress, isAdmin: false },
+    };
+    post.comments.push(comment);
+    res.status(201).json(comment);
+  });
+
+  app.post("/api/community/posts/:id/vote", (req, res) => {
+    const post = communityPosts.find((p) => p.id === req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    post.votedByMe = !post.votedByMe;
+    post.voteCount += post.votedByMe ? 1 : -1;
+    res.json({ voted: post.votedByMe, voteCount: post.voteCount });
+  });
+
+  app.patch("/api/community/posts/:id", (req, res) => {
+    const post = communityPosts.find((p) => p.id === req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    Object.assign(post, req.body || {});
+    res.json(post);
+  });
+
+  app.delete("/api/community/posts/:id", (req, res) => {
+    communityPosts = communityPosts.filter((p) => p.id !== req.params.id);
+    res.json({ success: true });
+  });
+
+  // -------------------------------------------------------------------------
+  // Local Node Simulator Endpoints
+  // -------------------------------------------------------------------------
+
+  app.get("/api/node", (_req, res) => {
+    const uptimeSeconds = Math.floor(process.uptime());
     const days = Math.floor(uptimeSeconds / (3600 * 24));
     const hours = Math.floor((uptimeSeconds % (3600 * 24)) / 3600);
     const mins = Math.floor((uptimeSeconds % 3600) / 60);
     const secs = uptimeSeconds % 60;
-    const uptimeStr = `${days}d ${hours.toString().padStart(2, '0')}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
+    const uptimeStr = `${days}d ${hours.toString().padStart(2, "0")}h ${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`;
+
+    const memMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
 
     res.json({
       status: nodeStatus,
-      version: "v1.0.4-stable",
+      version: "v0.118.0",
       uptime: uptimeStr,
       blockHeight,
-      syncProgress: nodeStatus === 'Synchronizing' ? 82 : 100,
+      syncProgress: nodeStatus === "Synchronizing" ? 84 : 100,
       peers,
-      blocks,
-      metrics,
-      logs: nodeLogs
+      blocks: devnetBlocks.map((b) => ({
+        number: b.number,
+        hash: b.hash,
+        parentHash: b.parentHash || "0x0000000000000000000000000000000000000000000000000000000000000000",
+        timestamp: new Date(b.timestamp).toISOString(),
+        txCount: b.transactions ?? 0,
+        size: b.size ?? "1.4 KB",
+        gasUsed: b.gasUsed ?? 0,
+        transactions: b.transactionsList ?? [],
+      })),
+      metrics: {
+        cpu: Math.min(100, Math.max(1, Math.round((process.cpuUsage().user / 1000000) % 15 + 2))),
+        memory: `${memMb} MB`,
+        network: peers.length > 0 ? peers.length * 15 : 0,
+        bandwidth: peers.length > 0 ? `${peers.length * 20} Mbps` : "0 Mbps",
+      },
+      logs: nodeLogs,
     });
   });
 
-  // Action: Restart Node
-  app.post("/api/node/restart", (req, res) => {
+  app.post("/api/node/restart", (_req, res) => {
     nodeStatus = "Restarting";
-    nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Restart requested. Initiating safe node shutdown...`);
-
-    setTimeout(() => {
-      nodeStatus = "Synchronizing";
-      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Loading persistent blockchain databases...`);
-      uptimeSeconds = 0; // reset uptime
-    }, 2000);
-
+    nodeLogs.push(`[${new Date().toISOString().slice(0, 10)}] INFO: Safe node restart initiated...`);
     setTimeout(() => {
       nodeStatus = "Operational";
-      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Node fully synchronized and operational at block height ${blockHeight}`);
-    }, 5000);
-
+      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)}] SUCCESS: Local CKB node restarted successfully.`);
+    }, 2000);
     res.json({ success: true, status: nodeStatus });
   });
 
-  // Action: Reset Node
-  app.post("/api/node/reset", (req, res) => {
+  app.post("/api/node/reset", (_req, res) => {
     nodeStatus = "Resetting";
-    nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] WARN: Hard reset requested. Purging local chain database...`);
-
+    nodeLogs.push(`[${new Date().toISOString().slice(0, 10)}] WARN: Devnet database purged. Generating genesis...`);
     setTimeout(() => {
       blockHeight = 0;
-      uptimeSeconds = 0;
-      blocks = [
-        {
-          number: 0,
-          hash: "0xgenesis000000000000000000000000000000000000000000000000000000000",
-          parentHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-          timestamp: new Date().toISOString(),
-          txCount: 0,
-          size: "1.2 KB",
-          gasUsed: 0,
-          transactions: []
-        }
-      ];
       nodeStatus = "Operational";
-      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Local testnet genesis loaded successfully. Node running.`);
-    }, 3000);
-
+      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)}] SUCCESS: Genesis block loaded.`);
+    }, 2000);
     res.json({ success: true, status: nodeStatus });
   });
 
-  // Action: Connect Peer
-  app.post("/api/node/connect-peer", (req, res) => {
-    const peerNames = ["sentinel-alpha", "node-tokyo-03", "validator-pro-8", "edge-london-44", "peer-singapore-1"];
-    const name = peerNames[Math.floor(Math.random() * peerNames.length)] + "-" + Math.floor(Math.random() * 1000);
-    const ip = `${Math.floor(Math.random() * 220 + 20)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
-    const region = ["US-East", "AP-Southeast", "EU-Central", "AP-Northeast", "SA-East"][Math.floor(Math.random() * 5)];
-    const client = ["Fiber/v1.0.4", "Geth/v1.12.0", "Fiber/v1.0.3"][Math.floor(Math.random() * 3)];
-
+  app.post("/api/node/peers", (req, res) => {
+    const { address, region } = req.body || {};
     const newPeer = {
-      id: name,
-      address: ip,
-      latency: Math.floor(Math.random() * 120 + 8),
-      region,
-      client
+      id: `ckb-peer-${Date.now().toString(36).slice(-4)}`,
+      address: address || `/ip4/127.0.0.1/tcp/${8115 + peers.length}/p2p/QmPeer${peers.length + 1}`,
+      latency: Math.floor(Math.random() * 15 + 6),
+      region: region || "Local Devnet",
+      client: "CKB/v0.118.0",
     };
-
     peers.push(newPeer);
-    nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Discovered and handshaked with new peer ${name} (${ip})`);
-
-    res.json({ success: true, peer: newPeer, peers });
-  });
-
-  // Action: Disconnect Peer
-  app.post("/api/node/disconnect-peer", (req, res) => {
-    const { id } = req.body;
-    if (id) {
-      peers = peers.filter(p => p.id !== id);
-      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] WARN: Disconnected P2P socket for peer: ${id}`);
-    }
+    nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Peer connected: ${newPeer.id} (${newPeer.address})`);
     res.json({ success: true, peers });
   });
 
-  // Action: Deploy Go Workspace Build / Deploy Contract
-  app.post("/api/node/deploy", (req, res) => {
-    const { filename, fileContent } = req.body;
-    const cleanName = filename || "main.go";
-
-    nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Compiling workspace source files...`);
-    nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Building Go package: fiber-app (target: linux/amd64)`);
-
-    setTimeout(() => {
-      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Build successful. Output bundle: fiber-app.bin (4.85 MB)`);
-      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Signing deploying transaction with default dev key 0xDevKey...`);
-    }, 1500);
-
-    setTimeout(() => {
-      // Add custom transaction to node mempool & push to logs
-      const txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Contract transaction ${txHash.slice(0, 16)}... submitted to local node mempool`);
-
-      // Inject transaction into active block immediately
-      blockHeight++;
-      const newBlock = {
-        number: blockHeight,
-        hash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-        parentHash: blocks[0]?.hash || "0x77d8811bc917af5299fa00a112cd9e8c3b4cf7f2898991bc2e89fa3c4cf7f2aa",
-        timestamp: new Date().toISOString(),
-        txCount: 1,
-        size: "6.2 KB",
-        gasUsed: 420000,
-        transactions: [
-          `0xDevKey deployed contract from ${cleanName} (Tx: ${txHash.slice(0, 12)}...)`
-        ]
-      };
-      blocks.unshift(newBlock);
-      nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] SUCCESS: Block #${blockHeight} mined containing contract deploy transaction (gas: 420,000)`);
-    }, 3000);
-
-    res.json({ success: true, currentBlock: blockHeight });
+  app.delete("/api/node/peers/:id", (req, res) => {
+    peers = peers.filter((p) => p.id !== req.params.id);
+    nodeLogs.push(`[${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 8)}] INFO: Peer disconnected: ${req.params.id}`);
+    res.json({ success: true, peers });
   });
 
-  // Action: Gemini AI Assistant Endpoint
-  app.post("/api/ai/chat", async (req, res) => {
-    const { prompt, currentFile, fileContent, mode } = req.body;
+  // -------------------------------------------------------------------------
+  // AI Assistant Endpoint (Server-Sent Events)
+  // -------------------------------------------------------------------------
 
-    if (!prompt) {
-      return res.status(400).json({ error: "Prompt is required" });
+  app.get("/api/ai/status", (_req, res) => {
+    res.json({
+      enabled: true,
+      defaultModel: "gemini-2.5-flash",
+      models: [
+        {
+          id: "gemini-2.5-flash",
+          name: "Gemini 2.5 Flash",
+          description: "High performance AI model for Nervos CKB RISC-V Rust smart contracts",
+        },
+      ],
+    });
+  });
+
+  app.post("/api/ai/chat", async (req, res) => {
+    const { messages, activeFile } = req.body || {};
+    const lastMessage = messages?.[messages.length - 1]?.content || "Explain CKB smart contracts";
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    const sendDelta = (text: string) => {
+      res.write(`event: delta\ndata: ${JSON.stringify({ text })}\n\n`);
+    };
+
+    const ai = getGemini();
+
+    if (ai) {
+      try {
+        const systemInstruction =
+          "You are an expert Nervos CKB blockchain developer and RISC-V Rust smart contract engineer. Answer questions clearly, accurately, with idiomatic Rust code using ckb-std and molecule. Format code cleanly in Markdown.";
+        const contents = `${activeFile ? `Active File (${activeFile.path}):\n\`\`\`rust\n${activeFile.content}\n\`\`\`\n\n` : ""}User prompt: ${lastMessage}`;
+
+        const streamResult = await ai.models.generateContentStream({
+          model: "gemini-2.5-flash",
+          contents,
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+          },
+        });
+
+        for await (const chunk of streamResult) {
+          if (chunk.text) {
+            sendDelta(chunk.text);
+          }
+        }
+
+        res.write(
+          `event: done\ndata: ${JSON.stringify({
+            model: "gemini-2.5-flash",
+            stopReason: "stop",
+            inputTokens: 120,
+            outputTokens: 280,
+          })}\n\n`
+        );
+        return res.end();
+      } catch (err: any) {
+        console.warn("Gemini streaming error, falling back to simulated reply:", err.message);
+      }
     }
 
-    try {
-      // Try to initialize Gemini API client. Handle missing key gracefully!
-      let ai;
-      try {
-        ai = getGemini();
-      } catch (err: any) {
-        console.warn("Gemini client initialization failed (likely missing API key):", err.message);
+    // Fallback streaming explanation
+    const simulatedChunks = [
+      `### Corven CKB Assistant\n\n`,
+      `Here is an overview regarding your request on **${activeFile?.path || "CKB Smart Contracts"}**:\n\n`,
+      `1. **Cell Model Fundamentals:** In Nervos CKB, smart contracts execute as RISC-V binaries loaded dynamically into the VM. Every cell contains \`capacity\`, \`data\`, \`lock\` script, and optionally a \`type\` script.\n\n`,
+      `2. **Script Verification:** The contract in \`${activeFile?.path || "contracts/hello-world/src/main.rs"}\` uses \`ckb_std::entry!\` to inspect incoming inputs and outgoing outputs via \`ckb_std::high_level::load_cell\`.\n\n`,
+      `\`\`\`rust\n// Example: Validating output capacity preservation\nlet input_capacity: u64 = load_cell_capacity(0, Source::Input)?;\nlet output_capacity: u64 = load_cell_capacity(0, Source::Output)?;\nif output_capacity > input_capacity {\n    return Err(SysError::Unknown(42));\n}\n\`\`\`\n\n`,
+      `3. **Testing:** Run \`cargo test\` in the integrated terminal to execute the transaction test harness with \`ckb-testtool\`!\n`,
+    ];
 
-        // Mock fallback responses so the app is 100% functional even without a key
-        let mockReply = "";
-        if (mode === "explain") {
-          mockReply = `### Local Fiber Assistant (Simulated Offline Mode)
+    for (const chunk of simulatedChunks) {
+      sendDelta(chunk);
+      await new Promise((r) => setTimeout(r, 60));
+    }
 
-Since a Gemini API key is not currently active, I have prepared a structural explanation of your active file **${currentFile || "post.go"}**:
+    res.write(
+      `event: done\ndata: ${JSON.stringify({
+        model: "gemini-2.5-flash",
+        stopReason: "stop",
+        inputTokens: 85,
+        outputTokens: 160,
+      })}\n\n`
+    );
+    res.end();
+  });
 
-1. **Fiber Route Handler**: It defines the endpoint logic for Creating and Fetching Posts using Go Fiber's Context pointer (\`*fiber.Ctx\`).
-2. **Body Parsing**: It utilizes \`c.BodyParser()\` to dynamically unmarshal the JSON payload into your Go models.
-3. **Database Integration**: It connects to your mock storage layer, validating inputs and committing changes thread-safely via singletons.
+  // -------------------------------------------------------------------------
+  // Socket.IO Service (Terminal, Build, Tests) on /terminal namespace
+  // -------------------------------------------------------------------------
 
-*Configure your key in **Settings > Secrets** to enable the live full-context Gemini AI.*`;
-        } else if (mode === "generate") {
-          mockReply = `// Local Fiber Assistant (Simulated Offline Mode)
-// Setup your GEMINI_API_KEY for dynamic real-time generation
+  const io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: (origin, callback) => {
+        // Reflect origin so credentials work without throwing wildcard CORS error
+        callback(null, true);
+      },
+      credentials: true,
+      methods: ["GET", "POST", "OPTIONS"],
+      allowedHeaders: [
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "X-Requested-With",
+        "Origin",
+        "Range",
+        "Cache-Control",
+        "Pragma",
+      ],
+    },
+    transports: ["websocket", "polling"],
+  });
 
-package api
+  const terminalNamespace = io.of("/terminal");
 
-import (
-    "github.com/gofiber/fiber/v2"
-)
+  terminalNamespace.on("connection", (socket) => {
+    const workspaceId = (socket.handshake.query.workspaceId as string) || "ws-default";
+    let activeSessionId: string | null = null;
 
-// GeneratedHandler represents a custom high-performance endpoint
-func GeneratedHandler(c *fiber.Ctx) error {
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "status":  "success",
-        "message": "Handler successfully auto-generated offline",
-    })
-}`;
-        } else {
-          mockReply = `I am running in offline mode because the Gemini API key is not set. 
+    // Notify client of authentication
+    socket.emit("terminal:authenticated", { success: true });
 
-Please go to **Settings > Secrets** and declare a **GEMINI_API_KEY** environment variable to unlock high-fidelity AI reviews, smart contract code completions, and automated transaction troubleshooting!`;
-        }
-        return res.json({ response: mockReply });
-      }
-
-      // Build context and system instruction
-      let systemInstruction = "You are an expert Go backend engineer and senior core blockchain compiler specialist. You write hyper-optimized, clean, safe, high-performance web APIs using the github.com/gofiber/fiber/v2 framework. Keep your replies structured, clear, professional, and focus primarily on executable code segments and direct annotations.";
-
-      let contents = "";
-      if (mode === "explain") {
-        contents = `Please explain the following Go file "${currentFile || "post.go"}":\n\n\`\`\`go\n${fileContent || ""}\n\`\`\`\n\nPrompt: ${prompt}`;
-      } else if (mode === "generate") {
-        contents = `Generate code based on this request. The active file is "${currentFile || "post.go"}" with content:\n\n\`\`\`go\n${fileContent || ""}\n\`\`\`\n\nRequest: ${prompt}\n\nMake sure to return the Go code nicely formatted inside markdown blocks.`;
-      } else {
-        contents = `The user is editing a project inside FiberDev Studio. The active file is "${currentFile || "post.go"}" with content:\n\n\`\`\`go\n${fileContent || ""}\n\`\`\`\n\nUser request: ${prompt}`;
-      }
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: contents,
-        config: {
-          systemInstruction: systemInstruction,
-          temperature: 0.7,
-        }
+    // Terminal open
+    socket.on("terminal:open", (payload: any) => {
+      activeSessionId = `term-${Date.now()}`;
+      socket.emit("terminal:ready", {
+        sessionId: activeSessionId,
+        execId: activeSessionId,
       });
 
-      res.json({ response: response.text || "No output returned from Gemini" });
-    } catch (error: any) {
-      console.error("Gemini API error:", error);
-      res.status(500).json({ error: error.message || "Failed to communicate with Gemini" });
-    }
+      // Send terminal greeting
+      const banner =
+        "\r\n\x1b[1;36m========================================================\x1b[0m\r\n" +
+        "\x1b[1;32m  Corven IDE - Nervos CKB RISC-V Cloud Terminal\x1b[0m\r\n" +
+        "\x1b[90m  Rust 1.78.0 | ckb-cli v0.118.0 | capsule v0.10.4\x1b[0m\r\n" +
+        "\x1b[1;36m========================================================\x1b[0m\r\n\r\n" +
+        `corven@${workspaceId}:~$ `;
+
+      socket.emit("terminal:output", {
+        sessionId: activeSessionId,
+        data: banner,
+      });
+    });
+
+    // Terminal input
+    socket.on("terminal:input", (payload: { data: string }) => {
+      const data = payload?.data || "";
+      if (data === "\r") {
+        socket.emit("terminal:output", {
+          sessionId: activeSessionId,
+          data: `\r\n\x1b[32m[corven-env]\x1b[0m Command executed. Type 'ckb-cli', 'cargo build', or 'help'.\r\ncorven@${workspaceId}:~$ `,
+        });
+      } else if (data === "\u007f") {
+        // Backspace
+        socket.emit("terminal:output", {
+          sessionId: activeSessionId,
+          data: "\b \b",
+        });
+      } else {
+        // Echo input
+        socket.emit("terminal:output", {
+          sessionId: activeSessionId,
+          data,
+        });
+      }
+    });
+
+    // Terminal resize & close
+    socket.on("terminal:resize", () => { });
+    socket.on("terminal:close", () => {
+      socket.emit("terminal:closed", { sessionId: activeSessionId });
+    });
+
+    // Projects list
+    socket.on("projects:list", () => {
+      socket.emit("projects:list:response", {
+        workspaceId,
+        projects: ["contracts/hello-world"],
+      });
+    });
+
+    // Build trigger
+    socket.on("build:start", (payload: { target: string; cwd?: string; buildId: string }) => {
+      const { target = "hello-world", buildId } = payload;
+      const startedAt = new Date().toISOString();
+
+      socket.emit("build:started", {
+        workspaceId,
+        buildId,
+        target,
+        cwd: `/workspace/${target}`,
+        startedAt,
+      });
+
+      const logLines = [
+        `   Compiling ckb-std v0.15.2\r\n`,
+        `   Compiling hello-world v0.1.0 (/workspace/contracts/hello-world)\r\n`,
+        `    Finished \x1b[1;32mrelease [optimized]\x1b[0m target(s) for riscv64imac-unknown-none-elf in 1.48s\r\n`,
+        `\x1b[1;32m==> Binary built:\x1b[0m target/riscv64imac-unknown-none-elf/release/hello-world (32.8 KB)\r\n`,
+      ];
+
+      let idx = 0;
+      const interval = setInterval(() => {
+        if (idx < logLines.length) {
+          socket.emit("build:output", {
+            workspaceId,
+            buildId,
+            stream: "stdout",
+            data: logLines[idx],
+          });
+          idx++;
+        } else {
+          clearInterval(interval);
+          socket.emit("build:finished", {
+            workspaceId,
+            buildId,
+            exitCode: 0,
+            status: "success",
+            error: null,
+            output: logLines.join(""),
+            cwd: `/workspace/contracts/hello-world`,
+            durationMs: 1480,
+            finishedAt: new Date().toISOString(),
+          });
+        }
+      }, 350);
+    });
+
+    // Test trigger
+    socket.on("test:start", (payload: { buildId?: string; testId?: string }) => {
+      const testId = payload?.buildId || payload?.testId || `test-${Date.now()}`;
+      socket.emit("test:started", {
+        workspaceId,
+        testId,
+        startedAt: new Date().toISOString(),
+      });
+
+      const testOutput =
+        "running 1 test\r\n" +
+        "test tests::test_hello_world_success ... \x1b[1;32mok\x1b[0m\r\n\r\n" +
+        "test result: \x1b[1;32mok\x1b[0m. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s\r\n";
+
+      setTimeout(() => {
+        socket.emit("test:output", {
+          workspaceId,
+          testId,
+          stream: "stdout",
+          data: testOutput,
+        });
+
+        socket.emit("test:finished", {
+          workspaceId,
+          testId,
+          exitCode: 0,
+          status: "success",
+          output: testOutput,
+          passed: 1,
+          failed: 0,
+          durationMs: 420,
+          finishedAt: new Date().toISOString(),
+        });
+      }, 800);
+    });
   });
 
-  // Vite development vs. production static assets middleware
+  // -------------------------------------------------------------------------
+  // Vite Middleware (Dev) vs Static Dist (Production)
+  // -------------------------------------------------------------------------
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -992,13 +1782,13 @@ Please go to **Settings > Secrets** and declare a **GEMINI_API_KEY** environment
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`FiberDev Studio Server booted on http://localhost:${PORT}`);
+  httpServer.listen(PORT, "0.0.0.0", () => {
+    console.log(`Corven IDE Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

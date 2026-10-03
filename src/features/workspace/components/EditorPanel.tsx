@@ -1,11 +1,13 @@
 // src/features/workspace/components/EditorPanel.tsx
 import { useEffect, useMemo, useState, type Ref } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Check,
     FileCode,
     Loader2,
     Save,
     Wand2,
+    Globe,
 } from 'lucide-react';
 import CodeMirror, {
     type ReactCodeMirrorRef,
@@ -167,9 +169,9 @@ export function EditorPanel({
     return (
         <section className="flex min-w-0 flex-1 flex-col bg-surface">
             {/* Tab header */}
-            <div className="flex h-9 items-center border-b border-outline-variant/30 bg-surface-container-low px-2">
-                <div className="flex h-full items-center gap-1.5 border-r border-t-2 border-r-outline-variant/20 border-t-primary bg-surface px-3 text-primary text-[11px] font-mono">
-                    <FileCode className="h-3.5 w-3.5" />
+            <div className="flex h-8 items-center border-b border-outline-variant/30 bg-surface-container-low px-2">
+                <div className="flex h-full items-center gap-1.5 border-r border-t-2 border-r-outline-variant/20 border-t-primary bg-surface px-2.5 text-primary text-[10.5px] font-mono">
+                    <FileCode className="h-3 w-3" />
 
                     <span>
                         {file.name}
@@ -179,14 +181,30 @@ export function EditorPanel({
             </div>
 
             {/* Breadcrumb & Action bar */}
-            <div className="flex h-8 items-center justify-between border-b border-outline-variant/20 bg-surface-container px-3">
-                <span className="truncate font-mono text-[10.5px] text-on-surface-variant flex items-center gap-1">
+            <div className="flex h-7 items-center justify-between border-b border-outline-variant/20 bg-surface-container px-3">
+                <span className="truncate font-mono text-[10px] text-on-surface-variant flex items-center gap-1">
                     <span className="text-primary font-medium">WORKSPACE</span>
                     <span>/</span>
                     <span>{file.path}</span>
                 </span>
 
                 <div className="flex shrink-0 items-center gap-1.5">
+                {(file.path.endsWith('.html') ||
+                    file.path.endsWith('.css') ||
+                    file.path.endsWith('.js') ||
+                    file.path.endsWith('.ts') ||
+                    file.path.endsWith('.tsx') ||
+                    file.path.includes('frontend/')) && (
+                    <Link
+                        to={`/browser?url=workspace://${file.path}`}
+                        className="flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-mono text-primary hover:bg-primary/20 transition-colors"
+                        title="Preview this frontend application in Browser App"
+                    >
+                        <Globe className="h-2.5 w-2.5" />
+                        <span>Preview</span>
+                    </Link>
+                )}
+
                 {isSchema && (['rust', 'c'] as const).map((language) => (
                     <button
                         key={language}
@@ -194,12 +212,12 @@ export function EditorPanel({
                         disabled={bindings.state === 'running'}
                         onClick={() => void generateBindings(language)}
                         title={`Run moleculec and write ${file.name.replace(/\.mol$/i, language === 'rust' ? '.rs' : '.h')} next to this schema`}
-                        className="flex items-center gap-1 rounded border border-outline-variant/30 bg-surface-container-high px-2 py-0.5 text-[10.5px] font-mono text-secondary hover:border-secondary/50 disabled:opacity-50 transition-colors"
+                        className="flex items-center gap-1 rounded border border-outline-variant/30 bg-surface-container-high px-2 py-0.5 text-[10px] font-mono text-secondary hover:border-secondary/50 disabled:opacity-50 transition-colors"
                     >
                         {bindings.state === 'running' && bindings.language === language ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
                         ) : (
-                            <Wand2 className="h-3 w-3" />
+                            <Wand2 className="h-2.5 w-2.5" />
                         )}
                         {language === 'rust' ? 'Rust bindings' : 'C header'}
                     </button>
@@ -213,16 +231,16 @@ export function EditorPanel({
                     onClick={() =>
                         void onSave()
                     }
-                    className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10.5px] font-mono transition-colors disabled:opacity-50 ${
+                    className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-mono transition-colors disabled:opacity-50 ${
                         isDirty
                             ? 'border-primary/50 bg-primary/10 text-primary font-medium hover:bg-primary/20'
                             : 'border-outline-variant/30 bg-surface-container-high text-on-surface-variant'
                     }`}
                 >
                     {isDirty ? (
-                        <Save className="h-3 w-3" />
+                        <Save className="h-2.5 w-2.5" />
                     ) : (
-                        <Check className="h-3 w-3 text-primary" />
+                        <Check className="h-2.5 w-2.5 text-primary" />
                     )}
 
                     {isSaving
@@ -237,25 +255,21 @@ export function EditorPanel({
             {isSchema && (bindings.state === 'done' || bindings.state === 'error') && (
                 <div
                     role="status"
-                    className={`flex items-start justify-between gap-3 border-b px-4 py-1.5 text-[11.5px] ${
+                    className={`flex items-start justify-between gap-3 border-b px-3 py-1 font-mono text-[10.5px] ${
                         bindings.state === 'done'
-                            ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-300'
-                            : 'border-rose-500/20 bg-rose-500/5 text-rose-300'
+                            ? 'border-primary/20 bg-primary/5 text-primary'
+                            : 'border-error/20 bg-error/5 text-error'
                     }`}
                 >
-                    <span className="min-w-0 break-words font-mono">
+                    <span className="min-w-0 break-words">
                         {bindings.state === 'done'
-                            ? `Wrote ${bindings.result.outputPath} (${(bindings.result.bytes / 1024).toFixed(1)} KB). ${
-                                bindings.result.language === 'rust'
-                                    ? 'Add molecule = { version = "0.9", default-features = false } to the contract to use it.'
-                                    : 'Include it with molecule_reader.h / molecule_builder.h.'
-                            }`
+                            ? `Wrote ${bindings.result.outputPath} (${(bindings.result.bytes / 1024).toFixed(1)} KB).`
                             : bindings.message}
                     </span>
                     <button
                         type="button"
                         onClick={() => setBindings({ state: 'idle' })}
-                        className="shrink-0 text-gray-500 hover:text-gray-300"
+                        className="shrink-0 text-on-surface-variant hover:text-on-surface"
                         aria-label="Dismiss"
                     >
                         ×
@@ -280,7 +294,6 @@ export function EditorPanel({
                         bracketMatching: true,
                         closeBrackets: true,
                         indentOnInput: true,
-                        tabSize: 4,
                     }}
                 />
             </div>

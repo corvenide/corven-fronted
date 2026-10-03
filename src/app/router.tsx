@@ -10,6 +10,7 @@ import DashboardPage from '../pages/DashboardPage';
 import IdePage from '../pages/IdePage';
 import NodesPage from '../pages/NodePage';
 import SettingsPage from '../pages/SettingsPage';
+import BrowserPage from '../pages/BrowserPage';
 import NotFoundPage from '../pages/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -45,6 +46,10 @@ export const router = createBrowserRouter([
                     {
                         path: '/settings',
                         element: <SettingsPage />,
+                    },
+                    {
+                        path: '/browser',
+                        element: <BrowserPage />,
                     },
                     {
                         // Old links to the bare IDE go to the workspace list.

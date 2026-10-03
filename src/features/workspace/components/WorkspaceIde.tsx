@@ -18,7 +18,8 @@ import { useResizablePanel } from '../hooks/useResizablePanel';
 import { ResizeHandle } from './ResizeHandle';
 import { useWorkspaceRuntime } from './WorkspaceStartup';
 
-import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Globe, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { IdePreviewPanel } from '../../browser/components/IdePreviewPanel';
 
 interface WorkspaceIdeProps {
     workspaceId: string;
@@ -31,6 +32,8 @@ export function WorkspaceIde({
 }: WorkspaceIdeProps) {
     const [terminalVisible, setTerminalVisible] = useState(true);
     const [aiPanelVisible, setAiPanelVisible] = useState(true);
+    const [previewVisible, setPreviewVisible] = useState(false);
+    const [previewMaximized, setPreviewMaximized] = useState(false);
 
     const files = useWorkspaceFiles(workspaceId);
     const runtime = useWorkspaceRuntime();
@@ -132,10 +135,29 @@ export function WorkspaceIde({
         storageKey: 'fiberdev.ide.aiPanelWidth',
     });
 
+    // Browser preview beside the editor: drag its left edge. It is pinned
+    // to the right of the editor, so growing rightward shrinks it.
+    const preview = useResizablePanel({
+        axis: 'horizontal',
+        initialSize: 480,
+        minSize: 280,
+        maxSize: 1600,
+        reverse: true,
+        storageKey: 'fiberdev.ide.previewWidth',
+    });
+
+    const closePreview = () => {
+        setPreviewVisible(false);
+        setPreviewMaximized(false);
+    };
+
+    const showEditor = !(previewVisible && previewMaximized);
+
     const isResizing =
         sidebar.isDragging ||
         terminal.isDragging ||
-        aiPanel.isDragging;
+        aiPanel.isDragging ||
+        preview.isDragging;
 
     return (
         <div
@@ -187,8 +209,13 @@ export function WorkspaceIde({
                 onPointerDown={sidebar.onPointerDown}
             />
 
-            {/* Main IDE (editor + terminal) */}
-            <div className="flex min-w-0 flex-1 h-full min-h-0 flex-col overflow-hidden bg-surface">
+            {/* Main IDE (editor + terminal). Hidden, not unmounted, while the
+                preview is expanded so the terminal session survives. */}
+            <div
+                className={`min-w-[240px] flex-1 h-full min-h-0 flex-col overflow-hidden bg-surface ${
+                    showEditor ? 'flex' : 'hidden'
+                }`}
+            >
                 {/* Editor container with relative positioning for terminal overlay */}
                 <div className="relative flex-1 min-h-0 overflow-hidden">
                     <div
@@ -260,13 +287,42 @@ export function WorkspaceIde({
                 </div>
             </div>
 
+            {/* Browser preview, beside the editor */}
+            {previewVisible && (
+                <>
+                    {showEditor && (
+                        <ResizeHandle
+                            axis="horizontal"
+                            isDragging={preview.isDragging}
+                            onPointerDown={preview.onPointerDown}
+                        />
+                    )}
+                    <aside
+                        className={`flex h-full min-h-0 flex-col overflow-hidden border-l border-outline-variant/30 bg-surface ${
+                            showEditor ? 'min-w-[280px]' : 'min-w-0 flex-1'
+                        }`}
+                        // Without shrink-0 the panel gives way on narrow windows
+                        // so the editor keeps its minimum width.
+                        style={showEditor ? { width: preview.size } : undefined}
+                    >
+                        <IdePreviewPanel
+                            workspaceId={workspaceId}
+                            maximized={previewMaximized}
+                            resizing={isResizing}
+                            onToggleMaximize={() => setPreviewMaximized((value) => !value)}
+                            onClose={closePreview}
+                        />
+                    </aside>
+                </>
+            )}
+
             {/* AI Panel Toggle Button - positioned between editor and AI panel */}
             <div className="relative flex items-center">
                 <button
                     type="button"
                     onClick={() => setAiPanelVisible(!aiPanelVisible)}
                     className="absolute z-30 -translate-x-1/2 rounded bg-surface-container-high p-1 text-on-surface-variant hover:bg-surface-container-highest hover:text-primary border border-outline-variant/40 shadow-sm"
-                    style={{ left: aiPanelVisible ? '-8px' : '4px' }}
+                    style={{ left: aiPanelVisible ? '-8px' : '-16px' }}
                     title={aiPanelVisible ? 'Collapse AI Assistant' : 'Expand AI Assistant'}
                 >
                     {aiPanelVisible ? (
@@ -274,6 +330,29 @@ export function WorkspaceIde({
                     ) : (
                         <PanelRightOpen className="h-3.5 w-3.5" />
                     )}
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (previewVisible) {
+                            closePreview();
+                        } else {
+                            // Code and browser side by side; the assistant can be reopened.
+                            setPreviewVisible(true);
+                            setAiPanelVisible(false);
+                        }
+                    }}
+                    className={`absolute top-3 z-30 -translate-x-1/2 rounded border p-1 shadow-sm hover:text-primary ${
+                        previewVisible
+                            ? 'border-primary/50 bg-primary/15 text-primary'
+                            : 'border-outline-variant/40 bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+                    }`}
+                    style={{ left: aiPanelVisible ? '-8px' : '-16px' }}
+                    title={previewVisible ? 'Close browser preview' : 'Open browser preview beside the code'}
+                    aria-pressed={previewVisible}
+                >
+                    <Globe className="h-3.5 w-3.5" />
                 </button>
 
                 {aiPanelVisible && (

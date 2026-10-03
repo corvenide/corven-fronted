@@ -8,6 +8,7 @@ import {
     Hammer,
     Rocket,
     Bug,
+    Globe,
 } from 'lucide-react';
 
 import React, { useState } from 'react';
@@ -17,13 +18,15 @@ import { TestsPanel } from './TestsPanel';
 import { BuildPanel } from './BuildPanel';
 import { DeployPanel } from '../../deploy/DeployPanel';
 import { DebugPanel } from '../../debugger/DebugPanel';
+import { IdeBrowserPanel } from '../../browser/components/IdeBrowserPanel';
 
 type BottomPanelTab =
     | 'terminal'
     | 'tests'
     | 'build'
     | 'deploy'
-    | 'debug';
+    | 'debug'
+    | 'browser';
 
 interface WorkspaceBottomPanelProps {
     workspaceId: string;
@@ -96,6 +99,13 @@ export function WorkspaceBottomPanel({
                         onClick={() => setActiveTab('debug')}
                     />
 
+                    <PanelTab
+                        label="Browser"
+                        active={activeTab === 'browser'}
+                        icon={<Globe className="h-3.5 w-3.5" />}
+                        onClick={() => setActiveTab('browser')}
+                    />
+
                 </div>
 
                 <button
@@ -132,6 +142,10 @@ export function WorkspaceBottomPanel({
 
                 <div className={activeTab === 'debug' ? 'h-full' : 'hidden'}>
                     <DebugPanel workspaceId={workspaceId} active={activeTab === 'debug'} />
+                </div>
+
+                <div className={activeTab === 'browser' ? 'h-full' : 'hidden'}>
+                    <IdeBrowserPanel workspaceId={workspaceId} />
                 </div>
 
             </div>
