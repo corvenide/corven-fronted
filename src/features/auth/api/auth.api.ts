@@ -28,6 +28,15 @@ export const authApi = {
         });
     },
 
+    /** Exchanges a Google ID token for a Corven session (sets the refresh cookie). */
+    googleLogin(credential: string): Promise<AuthResponse> {
+        return apiClient<AuthResponse>('/auth/google', {
+            method: 'POST',
+            authenticated: false,
+            body: JSON.stringify({ credential }),
+        });
+    },
+
     getCurrentUser(): Promise<AuthUser> {
         return apiClient<AuthUser>('/auth/me');
     },

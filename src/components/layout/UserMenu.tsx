@@ -103,7 +103,11 @@ export function UserMenu({ user, onSignOut }: { user: AuthUser; onSignOut: () =>
                         <div className="min-w-0">
                             <div className="truncate text-[13px] font-medium text-gray-100">{displayName(user)}</div>
                             <div className="text-[11.5px] text-gray-500">
-                                {user.authProvider === 'CKB_WALLET' ? 'CKB wallet' : 'Email account'}
+                                {user.authProvider === 'CKB_WALLET'
+                                    ? 'CKB wallet'
+                                    : user.authProvider === 'GOOGLE'
+                                        ? 'Google account'
+                                        : 'Email account'}
                             </div>
                         </div>
                     </div>

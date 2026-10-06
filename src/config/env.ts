@@ -20,6 +20,9 @@ export const env = {
         import.meta.env.VITE_TERMINAL_URL,
         'VITE_TERMINAL_URL',
     ),
+
+    /** Google OAuth client ID. Optional: without it the Google button is hidden. */
+    googleClientId: (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() ?? '',
 };
 
 /**

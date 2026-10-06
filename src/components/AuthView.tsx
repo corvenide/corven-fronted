@@ -17,6 +17,7 @@ import { ccc } from '@ckb-ccc/connector-react';
 
 import { ApiError } from '../lib/api-client';
 import { authApi } from '../features/auth/api/auth.api';
+import { GoogleSignInButton, googleSignInEnabled } from '../features/auth/components/GoogleSignInButton';
 import { useAuth } from '../features/auth/hooks/useAuth';
 
 interface AuthViewProps {
@@ -62,7 +63,8 @@ const PHASE_LABEL: Record<Phase, string> = {
 export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewProps) {
     const { open, wallet, disconnect } = ccc.useCcc();
     const signer = ccc.useSigner();
-    const { walletLogin } = useAuth();
+    const { walletLogin, googleLogin } = useAuth();
+    const [googleBusy, setGoogleBusy] = useState(false);
 
     const [address, setAddress] = useState('');
     const [phase, setPhase] = useState<Phase>('idle');
@@ -131,6 +133,22 @@ export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewPr
         }
     }, [signer, address, walletLogin, onAuthenticated]);
 
+    const signInWithGoogle = useCallback(
+        async (credential: string) => {
+            setError('');
+            setGoogleBusy(true);
+            try {
+                await googleLogin(credential);
+                onAuthenticated?.();
+            } catch (caught) {
+                setError(describeError(caught));
+            } finally {
+                setGoogleBusy(false);
+            }
+        },
+        [googleLogin, onAuthenticated],
+    );
+
     const copyAddress = async () => {
         try {
             await navigator.clipboard.writeText(address);
@@ -180,18 +198,18 @@ export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewPr
 
                     <div className="relative max-w-[520px]">
                         <h1 className="text-[3.4rem] font-medium leading-[1.02] tracking-[-0.045em] xl:text-[4rem]">
-                            Your wallet is{' '}
-                            <span className="cv-serif italic text-[var(--accent)]">your login.</span>
+                            Start building{' '}
+                            <span className="cv-serif italic text-[var(--accent)]">in seconds.</span>
                         </h1>
                         <p className="mt-6 max-w-[440px] text-[16px] leading-[1.65] text-[var(--muted)]">
-                            There's no password to create or forget. You prove the wallet is
-                            yours by signing a one-time message.
+                            There's no password to create or forget. Continue with Google, or
+                            prove a wallet is yours by signing a one-time message.
                         </p>
 
                         <ol className="mt-12 border-t border-[var(--line)]">
                             {[
-                                ['Connect', 'Choose JoyID, MetaMask, UniSat, OKX or another supported wallet.'],
-                                ['Sign', 'Approve a plain-text message. It is not a transaction.'],
+                                ['Sign in', 'Continue with Google, or choose JoyID, MetaMask, UniSat, OKX or another wallet.'],
+                                ['Confirm', 'Wallets approve a plain-text message. It is not a transaction.'],
                                 ['Build', 'Your workspaces open, and you stay signed in on this device.'],
                             ].map(([title, body], i) => (
                                 <li key={title} className="flex gap-5 border-b border-[var(--line)] py-5">
@@ -208,7 +226,7 @@ export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewPr
                     </div>
 
                     <p className="cv-mono relative text-[11px] text-[var(--dim)]">
-                        Corven never sees or stores your private keys.
+                        Corven never sees your Google password or your private keys.
                     </p>
                 </aside>
 
@@ -236,15 +254,17 @@ export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewPr
                             </div>
 
                             <h2 className="mt-5 text-[2rem] font-medium leading-[1.1] tracking-[-0.035em]">
-                                {connected ? 'Confirm it’s you' : 'Connect your wallet'}
+                                {connected ? 'Confirm it’s you' : 'Sign in to Corven'}
                             </h2>
                             <p className="mt-3 text-[15px] leading-[1.6] text-[var(--muted)]">
                                 {connected
                                     ? 'Sign a one-time message to finish signing in.'
-                                    : 'Use a CKB-compatible wallet to sign in or create your account.'}
+                                    : googleSignInEnabled
+                                        ? 'Use your Google account or a CKB-compatible wallet. New here? This creates your account.'
+                                        : 'Use a CKB-compatible wallet to sign in or create your account.'}
                             </p>
 
-                            <Steps connected={connected} phase={phase} />
+                            {connected && <Steps connected={connected} phase={phase} />}
 
                             {sessionExpired && !error && phase === 'idle' && (
                                 <Notice tone="info">Your session ended. Sign in again to pick up where you left off.</Notice>
@@ -257,17 +277,40 @@ export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewPr
                             )}
 
                             {!connected ? (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setError('');
-                                        open();
-                                    }}
-                                    className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[var(--accent)] text-[15px] font-medium text-[#07120c] transition-colors hover:bg-[var(--accent-hi)] active:translate-y-px"
-                                >
-                                    <Wallet className="h-4 w-4" />
-                                    Connect wallet
-                                </button>
+                                <>
+                                    {googleSignInEnabled && (
+                                        <>
+                                            <div className={`mt-8 ${googleBusy ? 'pointer-events-none opacity-60' : ''}`} aria-busy={googleBusy}>
+                                                <GoogleSignInButton
+                                                    onCredential={(credential) => void signInWithGoogle(credential)}
+                                                    onError={(message) => setError(message)}
+                                                />
+                                            </div>
+                                            {googleBusy && (
+                                                <p className="mt-3 flex items-center justify-center gap-2 text-[13px] text-[var(--muted)]">
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Signing in with Google…
+                                                </p>
+                                            )}
+                                            <div className="cv-mono my-5 flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-[var(--dim)]">
+                                                <span className="h-px flex-1 bg-[var(--line)]" />
+                                                or
+                                                <span className="h-px flex-1 bg-[var(--line)]" />
+                                            </div>
+                                        </>
+                                    )}
+                                    <button
+                                        type="button"
+                                        disabled={googleBusy}
+                                        onClick={() => {
+                                            setError('');
+                                            open();
+                                        }}
+                                        className={`${googleSignInEnabled ? '' : 'mt-6 '}inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[var(--accent)] text-[15px] font-medium text-[#07120c] transition-colors hover:bg-[var(--accent-hi)] active:translate-y-px disabled:opacity-60`}
+                                    >
+                                        <Wallet className="h-4 w-4" />
+                                        Connect wallet
+                                    </button>
+                                </>
                             ) : (
                                 <>
                                     <div className="mt-6 rounded-lg border border-[var(--line-strong)] bg-[var(--raised)] p-4">
@@ -361,7 +404,7 @@ export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewPr
                             <div className="mt-10 flex items-start gap-3 border-t border-[var(--line)] pt-6 text-[13px] leading-[1.6] text-[var(--dim)]">
                                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted)]" />
                                 <span>
-                                    Signing in doesn’t send a transaction or cost any fees. Each sign-in
+                                    Signing in never sends a transaction or costs fees. Each wallet sign-in
                                     request can be used once and expires after 5 minutes.
                                 </span>
                             </div>

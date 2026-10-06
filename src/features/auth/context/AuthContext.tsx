@@ -32,6 +32,8 @@ export interface AuthContextValue {
     endReason: SessionEndReason | null;
 
     walletLogin: (input: WalletLoginInput) => Promise<void>;
+    /** Signs in with the ID token from Google Identity Services. */
+    googleLogin: (credential: string) => Promise<void>;
     logout: () => Promise<void>;
     logoutEverywhere: () => Promise<void>;
     refreshUser: () => Promise<void>;
@@ -122,6 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         startSession(response);
     }, []);
 
+    const googleLogin = useCallback(async (credential: string) => {
+        const response = await authApi.googleLogin(credential);
+        startSession(response);
+    }, []);
+
     const logout = useCallback(async () => {
         await endSession();
 
@@ -152,11 +159,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isInitializing,
             endReason,
             walletLogin,
+            googleLogin,
             logout,
             logoutEverywhere,
             refreshUser,
         }),
-        [user, isInitializing, endReason, walletLogin, logout, logoutEverywhere, refreshUser],
+        [user, isInitializing, endReason, walletLogin, googleLogin, logout, logoutEverywhere, refreshUser],
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

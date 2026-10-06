@@ -6,7 +6,7 @@ export interface AuthUser {
     email: string | null;
     walletAddress: string | null;
     role: 'USER' | 'ADMIN';
-    authProvider: 'EMAIL' | 'CKB_WALLET';
+    authProvider: 'EMAIL' | 'CKB_WALLET' | 'GOOGLE';
     createdAt: string;
 }
 

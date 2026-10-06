@@ -3,6 +3,8 @@
 // Deploy built contracts from the IDE.
 //   Devnet:  one click; the workspace devnet's test account pays (offckb).
 //   Testnet: built and signed in the user's wallet (CCC), then recorded.
+//            Google accounts without a connected wallet use their Corven
+//            testnet wallet (signed on the server, see features/wallet).
 // Upgradable deploys use a Type ID, so redeploying keeps the code hash.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -26,6 +28,7 @@ import { workspaceApi } from '../workspace/api/workspace.api';
 import { workspaceKeys } from '../workspace/queries/workspace.keys';
 import { base64ToBytes, deployApi, type ContractDeployment, type DeployNetwork } from './deploy.api';
 import { deployFromWallet, estimateCapacity, formatCkb } from './wallet-deploy';
+import { useCorvenTestnetSigner } from '../wallet/corven-signer';
 
 const TESTNET_EXPLORER = 'https://testnet.explorer.nervos.org';
 const TESTNET_FAUCET = 'https://faucet.nervos.org/';
@@ -176,7 +179,11 @@ function DeploymentRow({ deployment, open, onToggle }: { deployment: ContractDep
 export function DeployPanel({ workspaceId, active }: { workspaceId: string; active: boolean }) {
     const queryClient = useQueryClient();
     const { open: openWallet, setClient } = ccc.useCcc();
-    const signer = ccc.useSigner();
+    const connectedSigner = ccc.useSigner();
+    const corvenSigner = useCorvenTestnetSigner();
+    // A connected wallet wins; otherwise a Google account's Corven wallet.
+    const signer = connectedSigner ?? corvenSigner ?? undefined;
+    const usingCorvenWallet = !connectedSigner && Boolean(corvenSigner);
 
     const [network, setNetwork] = useState<'DEVNET' | 'TESTNET'>('DEVNET');
     const [contract, setContract] = useState('');
@@ -221,7 +228,7 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
     const onTestnet = signer?.client.addressPrefix === 'ckt';
 
     const wallet = useQuery({
-        queryKey: ['wallet', signer ? 'connected' : 'none', signer?.client.addressPrefix],
+        queryKey: ['wallet', signer ? (usingCorvenWallet ? 'corven' : 'connected') : 'none', signer?.client.addressPrefix],
         queryFn: async () => {
             if (!signer) return null;
             const [address, balance] = await Promise.all([signer.getRecommendedAddress(), signer.getBalance()]);
@@ -277,7 +284,7 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
             setPhase('Preparing the transaction…');
             const { base64 } = await deployApi.binary(workspaceId, selected.name);
 
-            setPhase('Confirm the transaction in your wallet…');
+            setPhase(usingCorvenWallet ? 'Signing with your Corven wallet…' : 'Confirm the transaction in your wallet…');
             const result = await deployFromWallet(signer, {
                 data: base64ToBytes(base64),
                 upgradable,
@@ -414,6 +421,14 @@ export function DeployPanel({ workspaceId, active }: { workspaceId: string; acti
                     </div>
                 ) : (
                     <div className="space-y-1 rounded border border-outline-variant/30 bg-surface px-2 py-1.5">
+                        {usingCorvenWallet && (
+                            <div className="flex items-center justify-between gap-2 text-[9.5px] text-on-surface-variant/80">
+                                <span>Corven wallet (testnet)</span>
+                                <button type="button" onClick={() => openWallet()} className="underline-offset-2 hover:text-on-surface hover:underline">
+                                    Use another wallet
+                                </button>
+                            </div>
+                        )}
                         <div className="flex items-center justify-between gap-2">
                             <span className="truncate text-on-surface-variant">{wallet.data ? short(wallet.data.address, 8, 4) : '…'}</span>
                             <span className="shrink-0 text-on-surface">

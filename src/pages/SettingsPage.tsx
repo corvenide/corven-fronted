@@ -28,6 +28,7 @@ import { Avatar, displayName } from '../components/layout/UserMenu';
 import { aiApi } from '../features/ai/api/ai.api';
 import { useAuth } from '../features/auth/hooks/useAuth';
 import { ConfirmDialog } from '../features/dashboard/components/ConfirmDialog';
+import { CorvenWalletCard } from '../features/wallet/CorvenWalletCard';
 
 const MODEL_KEY = 'corven.ai.model';
 const CHAT_PREFIX = 'corven.ai.chat.';
@@ -284,7 +285,13 @@ app.use((req, res, next) => {
                                                     CKB Devnet Active
                                                 </span>
                                                 <span>•</span>
-                                                <span>{user.authProvider === 'CKB_WALLET' ? 'Wallet authenticated' : 'Email session'}</span>
+                                                <span>
+                                                    {user.authProvider === 'CKB_WALLET'
+                                                        ? 'Wallet authenticated'
+                                                        : user.authProvider === 'GOOGLE'
+                                                            ? 'Signed in with Google'
+                                                            : 'Email session'}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -330,6 +337,8 @@ app.use((req, res, next) => {
                                     </div>
                                 </dl>
                             </div>
+
+                            {user.authProvider === 'GOOGLE' && <CorvenWalletCard />}
                         </div>
                     )}
 
