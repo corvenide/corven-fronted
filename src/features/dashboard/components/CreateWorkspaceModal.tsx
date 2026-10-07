@@ -1,6 +1,7 @@
 // src/features/dashboard/components/CreateWorkspaceModal.tsx
 import React, { useState } from 'react';
 import { useWorkspaces } from '../hooks/useWorkspaces';
+import { useAuth } from '../../auth/hooks/useAuth';
 import type { Workspace } from '../../workspace/types/workspace.types';
 
 interface CreateWorkspaceModalProps {
@@ -21,6 +22,8 @@ export function CreateWorkspaceModal({
     const [name, setName] = useState('');
     const [selectedFramework, setSelectedFramework] = useState<'rust' | 'c'>('rust');
     const [prewarm, setPrewarm] = useState(true);
+    const { isGuest } = useAuth();
+    const [temporary, setTemporary] = useState(false);
 
     if (!isOpen) return null;
 
@@ -41,6 +44,7 @@ export function CreateWorkspaceModal({
             const workspace = await createWorkspace({
                 name: name.trim(),
                 templateId,
+                temporary: isGuest || temporary,
             });
 
             onCreated(workspace);
@@ -127,6 +131,30 @@ export function CreateWorkspaceModal({
                             </label>
                         </div>
                     </div>
+
+                    {isGuest ? (
+                        <p data-testid="guest-temporary-note" className="flex items-start gap-1.5 rounded border border-secondary/30 bg-secondary/10 px-2 py-1.5 text-[10.5px] leading-snug text-on-surface-variant">
+                            <span className="material-symbols-outlined text-[14px] text-secondary">timer</span>
+                            <span>
+                                As a guest this workspace is temporary: it’s deleted 24 hours after you last use it.
+                                Connect a wallet to keep it.
+                            </span>
+                        </p>
+                    ) : (
+                        <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setTemporary(!temporary)}>
+                            <input
+                                checked={temporary}
+                                onChange={(e) => setTemporary(e.target.checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="accent-primary rounded cursor-pointer w-3.5 h-3.5"
+                                id="temporary-workspace"
+                                type="checkbox"
+                            />
+                            <label className="text-[10.5px] text-on-surface-variant cursor-pointer select-none" htmlFor="temporary-workspace" onClick={(e) => e.stopPropagation()}>
+                                Temporary — delete it 24 hours after I last use it
+                            </label>
+                        </div>
+                    )}
 
                     {createError && (
                         <p className="text-[10px] text-error font-medium">

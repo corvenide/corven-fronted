@@ -23,6 +23,15 @@ export const env = {
 
     /** Google OAuth client ID. Optional: without it the Google button is hidden. */
     googleClientId: (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() ?? '',
+
+    /**
+     * Corven Connect API (for the Connect dashboard). Defaults to the same
+     * server as the IDE API: https://<api>/api -> https://<api>/connect/v1.
+     */
+    connectApiUrl: (
+        (import.meta.env.VITE_CONNECT_API_URL as string | undefined)?.trim() ||
+        (import.meta.env.VITE_API_URL as string).replace(/\/+$/, '').replace(/\/api$/, '') + '/connect/v1'
+    ).replace(/\/+$/, ''),
 };
 
 /**

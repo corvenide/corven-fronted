@@ -303,10 +303,11 @@ function TopNav({
                 <div className="hidden items-center gap-5 sm:flex">
                     <BlockIndicator block={activeBlock} />
                     <a
-                        href="/donate"
-                        className="text-[14px] text-[var(--muted)] transition-colors hover:text-[var(--text)]"
+                        href="/connect"
+                        className="inline-flex items-center gap-1.5 text-[14px] text-[var(--muted)] transition-colors hover:text-[var(--text)]"
                     >
-                        Support
+                        Connect
+                        <span className="cv-mono rounded border border-[var(--line-strong)] px-1 py-px text-[9.5px] text-[var(--accent)]">SDK</span>
                     </a>
                     <button
                         type="button"
@@ -349,8 +350,8 @@ function TopNav({
                                     {item.label}
                                 </a>
                             ))}
-                            <a href="/donate" className="py-3 text-[15px] text-[var(--muted)]">
-                                Support
+                            <a href="/connect" className="py-3 text-[15px] text-[var(--muted)]">
+                                Corven Connect
                             </a>
                             <button
                                 type="button"
@@ -828,8 +829,8 @@ export default function HomeView({ onStartBuilding, activeBlock }: HomeViewProps
                                 className="md:col-span-2"
                                 icon={<Wallet className="h-4 w-4" />}
                                 label="Identity"
-                                title="Sign in with your CKB wallet"
-                                body="Use a CKB wallet or email. Wallet sign-in works by signing a message, and no password is stored."
+                                title="Try it first, sign in later"
+                                body="Start without an account. Connect a CKB wallet or Google when you want to keep your workspaces. No password is stored."
                             />
                             <Tile
                                 className="md:col-span-2"
@@ -915,7 +916,7 @@ export default function HomeView({ onStartBuilding, activeBlock }: HomeViewProps
                                 <span className="cv-serif italic text-[var(--accent)]">one tab away.</span>
                             </h2>
                             <p className="mx-auto mt-6 max-w-[480px] text-[16px] leading-[1.65] text-[var(--muted)]">
-                                Sign in with a CKB wallet or email and open your first workspace.
+                                No sign-up needed: open a workspace now, and connect a wallet when you want to keep it.
                             </p>
                             <div className="mt-9 flex flex-wrap justify-center gap-3">
                                 <PrimaryButton onClick={onStartBuilding}>Start building</PrimaryButton>

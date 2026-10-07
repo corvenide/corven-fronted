@@ -1,7 +1,7 @@
 // src/components/layout/UserMenu.tsx
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Copy, Download, LogOut, Settings } from 'lucide-react';
+import { Check, Copy, Download, LogOut, Settings, Wallet } from 'lucide-react';
 
 import type { AuthUser } from '../../features/auth/types/auth.types';
 import { promptInstall, useCanInstall } from '../../features/pwa/install-prompt';
@@ -103,16 +103,32 @@ export function UserMenu({ user, onSignOut }: { user: AuthUser; onSignOut: () =>
                         <div className="min-w-0">
                             <div className="truncate text-[13px] font-medium text-gray-100">{displayName(user)}</div>
                             <div className="text-[11.5px] text-gray-500">
-                                {user.authProvider === 'CKB_WALLET'
-                                    ? 'CKB wallet'
-                                    : user.authProvider === 'GOOGLE'
-                                        ? 'Google account'
-                                        : 'Email account'}
+                                {user.isGuest
+                                    ? 'Guest · temporary workspaces'
+                                    : user.authProvider === 'CKB_WALLET'
+                                        ? 'CKB wallet'
+                                        : user.authProvider === 'GOOGLE'
+                                            ? 'Google account'
+                                            : 'Email account'}
                             </div>
                         </div>
                     </div>
 
                     <div className="py-1">
+                        {user.isGuest && (
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setOpen(false);
+                                    navigate('/auth', { state: { from: { pathname: '/dashboard' } } });
+                                }}
+                                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] text-emerald-300 hover:bg-[#21262d]"
+                            >
+                                <Wallet className="h-4 w-4" />
+                                Connect wallet or sign in
+                            </button>
+                        )}
                         {user.walletAddress && (
                             <button type="button" role="menuitem" onClick={() => void copyAddress()} className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] text-gray-300 hover:bg-[#21262d] hover:text-white">
                                 {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-gray-500" />}
@@ -158,7 +174,7 @@ export function UserMenu({ user, onSignOut }: { user: AuthUser; onSignOut: () =>
                             className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] text-gray-300 hover:bg-[#21262d] hover:text-white"
                         >
                             <LogOut className="h-4 w-4 text-gray-500" />
-                            Sign out
+                            {user.isGuest ? 'End guest session' : 'Sign out'}
                         </button>
                     </div>
                 </div>

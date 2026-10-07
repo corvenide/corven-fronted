@@ -5,6 +5,7 @@ import { ccc } from '@ckb-ccc/connector-react';
 
 import { useAuth } from '../../features/auth/hooks/useAuth';
 import { UserMenu } from './UserMenu';
+import { KeepWorkspacesDialog } from '../../features/workspace/components/KeepWorkspacesDialog';
 
 const DOCS_URL = 'https://docs.nervos.org/';
 
@@ -18,7 +19,7 @@ export default function AppLayout() {
     const location = useLocation();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { user, logout } = useAuth();
+    const { user, isGuest, logout } = useAuth();
     const { open, wallet } = ccc.useCcc();
 
     const inIde = location.pathname.startsWith('/ide');
@@ -135,7 +136,17 @@ export default function AppLayout() {
                         <span className="text-primary font-medium">24 ms</span>
                     </div>
 
-                    {/* Connected wallet button */}
+                    {/* Connected wallet button; guests connect a wallet to keep their work */}
+                    {isGuest ? (
+                        <button
+                            type="button"
+                            onClick={() => navigate('/auth', { state: { from: location } })}
+                            className="flex items-center gap-space-xs whitespace-nowrap px-3 py-1 rounded-full bg-primary text-on-primary hover:bg-primary-fixed font-body-sm text-body-sm font-medium transition-colors"
+                            title="Connect a wallet to keep your workspaces"
+                        >
+                            <span>Connect<span className="hidden sm:inline"> wallet</span></span>
+                        </button>
+                    ) : (
                     <button
                         type="button"
                         onClick={() => open()}
@@ -150,6 +161,7 @@ export default function AppLayout() {
                             <span className="material-symbols-outlined text-[12px]">token</span>
                         </div>
                     </button>
+                    )}
 
                     {/* User profile avatar / menu */}
                     {user ? (
@@ -261,6 +273,7 @@ export default function AppLayout() {
                     <Outlet />
                 </main>
             </div>
+            <KeepWorkspacesDialog />
         </div>
     );
 }

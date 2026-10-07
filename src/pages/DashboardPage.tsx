@@ -20,7 +20,7 @@ function displayName(user: ReturnType<typeof useAuth>['user']): string | null {
 
 export default function DashboardPage() {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, isGuest } = useAuth();
 
     const {
         workspaces,
@@ -33,6 +33,8 @@ export default function DashboardPage() {
         startingWorkspaceId,
         stoppingWorkspaceId,
         removingWorkspaceId,
+        setWorkspaceTemporary,
+        keepingWorkspaceId,
     } = useWorkspaces();
 
     return (
@@ -49,6 +51,12 @@ export default function DashboardPage() {
             onStartWorkspace={(workspaceId) => void startWorkspace(workspaceId).catch(() => undefined)}
             onStopWorkspace={(workspaceId) => void stopWorkspace(workspaceId).catch(() => undefined)}
             onRemoveWorkspace={(workspaceId) => void removeWorkspace(workspaceId).catch(() => undefined)}
+            isGuest={isGuest}
+            keepingWorkspaceId={keepingWorkspaceId}
+            onKeepWorkspace={(workspaceId) =>
+                void setWorkspaceTemporary({ workspaceId, temporary: false }).catch(() => undefined)
+            }
+            onConnectWallet={() => navigate('/auth', { state: { from: { pathname: '/dashboard' } } })}
         />
     );
 }

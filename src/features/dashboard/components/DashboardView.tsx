@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import type { Workspace, WorkspaceStatus } from '../../workspace/types/workspace.types';
+import { timeLeft } from '../../workspace/utils/expiry';
+import { formatRelativeTime } from '../utils/formatRelativeTime';
 import { CreateWorkspaceModal } from './CreateWorkspaceModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import CommunityTab from './CommunityTab';
@@ -25,6 +27,14 @@ interface DashboardViewProps {
     onStartWorkspace: (workspaceId: string) => void;
     onStopWorkspace: (workspaceId: string) => void;
     onRemoveWorkspace: (workspaceId: string) => void;
+
+    /** A guest session (no sign-in): every workspace is temporary. */
+    isGuest?: boolean;
+    keepingWorkspaceId?: string;
+    /** Keep a temporary workspace for good (signed-in users). */
+    onKeepWorkspace?: (workspaceId: string) => void;
+    /** Guests: go connect a wallet or sign in. */
+    onConnectWallet?: () => void;
 }
 
 type Filter = 'all' | 'running' | 'stopped' | 'failed';
@@ -42,6 +52,10 @@ export default function DashboardView({
     onStartWorkspace,
     onStopWorkspace,
     onRemoveWorkspace,
+    isGuest = false,
+    keepingWorkspaceId,
+    onKeepWorkspace,
+    onConnectWallet,
 }: DashboardViewProps) {
     const [searchParams] = useSearchParams();
     const currentTab = searchParams.get('tab') || 'workspaces';
@@ -162,6 +176,35 @@ export default function DashboardView({
                         </button>
                     </div>
                 </div>
+
+                {isGuest && (
+                    <div
+                        data-testid="guest-banner"
+                        className="flex flex-col gap-space-md rounded-xl border border-primary/30 bg-primary/[0.06] p-space-lg sm:flex-row sm:items-center sm:justify-between"
+                    >
+                        <div className="flex items-start gap-space-md">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                                <span className="material-symbols-outlined text-[22px]">timer</span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <span className="font-headline-sm text-headline-sm font-medium text-on-surface">
+                                    You’re trying Corven as a guest
+                                </span>
+                                <span className="font-body-sm text-body-sm text-on-surface-variant">
+                                    No sign-up needed. Your workspaces are temporary: each is deleted 24 hours after you
+                                    last use it. Connect a wallet to keep them.
+                                </span>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onConnectWallet}
+                            className="flex shrink-0 items-center justify-center gap-space-xs rounded-xl bg-primary px-space-md py-2 font-body-sm text-body-sm font-medium text-on-primary transition-colors hover:bg-primary-fixed"
+                        >
+                            Connect wallet
+                        </button>
+                    </div>
+                )}
 
                 {/* 4 Metrics Summaries */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
@@ -393,8 +436,17 @@ export default function DashboardView({
                                                                 <span className="font-headline-sm text-headline-sm text-on-surface font-medium hover:text-primary transition-colors">
                                                                     {ws.name}
                                                                 </span>
-                                                                <span className="font-code-sm text-code-sm text-on-surface-variant">
+                                                                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-code-sm text-code-sm text-on-surface-variant">
                                                                     {subName}
+                                                                    {ws.temporary && (
+                                                                        <span
+                                                                            data-testid="temporary-badge"
+                                                                            title="Deleted 24 hours after its last use"
+                                                                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-secondary/30 bg-secondary/10 px-1.5 py-px text-[10.5px] text-secondary"
+                                                                        >
+                                                                            Temporary · {timeLeft(ws.expiresAt)}
+                                                                        </span>
+                                                                    )}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -439,15 +491,27 @@ export default function DashboardView({
                                                     </td>
 
                                                     <td className="py-space-md px-space-md hidden sm:table-cell text-on-surface-variant font-code-sm text-code-sm">
-                                                        {isRunning ? 'Active now' : '5h ago'}
+                                                        {isRunning
+                                                            ? 'Active now'
+                                                            : formatRelativeTime(ws.lastActivityAt ?? ws.lastStoppedAt ?? ws.createdAt).replace('Updated ', '')}
                                                     </td>
 
                                                     <td className="py-space-md px-space-md hidden lg:table-cell text-on-surface-variant font-code-sm text-code-sm">
-                                                        28 Sept 2026
+                                                        {new Date(ws.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                                                     </td>
 
                                                     <td className="py-space-md px-space-lg text-right" onClick={(e) => e.stopPropagation()}>
                                                         <div className="inline-flex items-center gap-1 justify-end">
+                                                            {ws.temporary && (
+                                                                <button
+                                                                    onClick={() => (isGuest ? onConnectWallet?.() : onKeepWorkspace?.(ws.id))}
+                                                                    disabled={keepingWorkspaceId === ws.id}
+                                                                    className="h-7 px-2 rounded-md border border-secondary/30 text-secondary hover:bg-secondary/10 font-body-sm text-body-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                                                                    title={isGuest ? 'Connect a wallet to keep this workspace' : 'Keep this workspace for good'}
+                                                                >
+                                                                    <span>Keep</span>
+                                                                </button>
+                                                            )}
                                                             {isRunning ? (
                                                                 <button
                                                                     onClick={() => onStopWorkspace(ws.id)}

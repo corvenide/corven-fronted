@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CKB Social Login Guide</title>
+<style>
+  :root {
+    --bg: #0a0b0d; --surface: #111317; --raised: #171a1f; --line: rgba(255,255,255,.08);
+    --text: #ecebe6; --muted: #9a9ea6; --dim: #6b7079; --accent: #3cc68a; --warn: #f0b429; --danger: #f07178;
+    --code-bg: #0d0f12;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 48px 20px 96px; }
+  header .eyebrow { font: 12px/1 ui-monospace, Menlo, monospace; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+  h1 { font-size: clamp(2rem, 5vw, 2.8rem); line-height: 1.1; letter-spacing: -.03em; margin: 14px 0 12px; }
+  h2 { font-size: 1.45rem; letter-spacing: -.02em; margin: 56px 0 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 28px 0 6px; }
+  p, li { color: #d6d5d0; }
+  .lead { color: var(--muted); font-size: 1.05rem; max-width: 720px; }
+  nav.toc { margin: 28px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  nav.toc a { text-decoration: none; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+  nav.toc a:hover { color: var(--text); border-color: rgba(255,255,255,.2); }
+  .step { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; background: rgba(60,198,138,.12); color: var(--accent); font: 600 13px ui-monospace, monospace; margin-right: 8px; }
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 18px 0; }
+  .flow div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 13.5px; color: var(--muted); }
+  .flow b { display: block; color: var(--text); margin-bottom: 4px; font-size: 14px; }
+  .note { border-left: 3px solid var(--accent); background: rgba(60,198,138,.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; color: #cfe9dc; }
+  .warn { border-left-color: var(--warn); background: rgba(240,180,41,.07); color: #f3dfaa; }
+  .danger { border-left-color: var(--danger); background: rgba(240,113,120,.07); color: #f4c2c5; }
+  .code { position: relative; margin: 12px 0 20px; }
+  .code .file { font: 12px ui-monospace, Menlo, monospace; color: var(--dim); background: var(--raised); border: 1px solid var(--line); border-bottom: 0; border-radius: 8px 8px 0 0; padding: 7px 12px; }
+  pre { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 0 0 8px 8px; padding: 14px 16px; overflow-x: auto; font: 12.8px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: #d7dae0; }
+  .code:not(:has(.file)) pre { border-radius: 8px; }
+  .copy { position: absolute; top: 6px; right: 8px; font: 12px ui-sans-serif, system-ui; color: var(--muted); background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+  .copy:hover { color: var(--text); }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; background: var(--raised); padding: 1px 5px; border-radius: 4px; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; }
+  ul.check { list-style: none; padding: 0; }
+  ul.check li { padding-left: 26px; position: relative; margin: 6px 0; }
+  ul.check li::before { content: "✓"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+  footer { margin-top: 64px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Corven · Integration guide</div>
+  <h1>Google sign-in with a CKB wallet, backend and frontend</h1>
+  <p class="lead">
+    Let people sign in with Google and get a CKB wallet without installing anything.
+    Google proves who they are, your server holds an encrypted CKB key for them, and
+    <a href="https://github.com/ckb-devrel/ccc">CCC</a> builds and signs the transactions.
+    This is how Corven does it, in a NestJS/Node backend and a React frontend.
+  </p>
+  <nav class="toc">
+    <a href="#how">How it works</a>
+    <a href="#setup">1. Google setup</a>
+    <a href="#db">2. Database</a>
+    <a href="#verify">3. Verify Google</a>
+    <a href="#vault">4. Encrypt keys</a>
+    <a href="#wallet">5. Create wallets</a>
+    <a href="#api">6. API routes</a>
+    <a href="#frontend">7. Frontend button</a>
+    <a href="#signer">8. CCC signer</a>
+    <a href="#security">Security</a>
+    <a href="#run">Run it</a>
+  </nav>
+</header>
+
+<h2 id="how">How it works</h2>
+<p>CCC itself has no social login: its connector only lists wallets (JoyID, MetaMask, UniSat…). Social login is your own auth, with a wallet attached:</p>
+<div class="flow">
+  <div><b>1. Google button</b>Google Identity Services shows the account picker and returns a signed ID token.</div>
+  <div><b>2. Your API verifies it</b>Signature, audience (your client ID), expiry, verified email.</div>
+  <div><b>3. Account + wallets</b>First sign-in creates the user and a testnet and a mainnet CKB key, encrypted.</div>
+  <div><b>4. Session</b>Your normal access and refresh tokens. No Google token is stored.</div>
+  <div><b>5. Transactions</b>The browser builds with CCC; the server decrypts the key only to sign.</div>
+</div>
+<div class="note warn"><b>Custodial.</b> Your server holds the keys, so you are responsible for the funds. Keep mainnet limited, protect the master key, and let users export their key.</div>
+
+<h2 id="setup"><span class="step">1</span>Google Cloud setup</h2>
+<ol>
+  <li>Google Cloud Console → <b>APIs &amp; Services → Credentials → Create credentials → OAuth client ID</b>, type <b>Web application</b>.</li>
+  <li><b>Authorized JavaScript origins:</b> every address your frontend runs on, exactly, e.g. <code>http://localhost</code>, <code>http://localhost:5173</code>, <code>https://app.example.com</code>. The popup flow needs no redirect URI.</li>
+  <li>Copy the client ID. It is public (it ends up in the browser), but backend and frontend must use the same one.</li>
+</ol>
+<div class="code"><div class="file">backend/.env</div><button class="copy">Copy</button><pre><code>GOOGLE_CLIENT_ID=1234-abc.apps.googleusercontent.com
+# 32 random bytes: openssl rand -base64 32   (back it up off the server!)
+WALLET_ENCRYPTION_KEY=...
+WALLET_MAINNET_DAILY_LIMIT_CKB=1000</code></pre></div>
+<div class="code"><div class="file">frontend/.env</div><button class="copy">Copy</button><pre><code>VITE_GOOGLE_CLIENT_ID=1234-abc.apps.googleusercontent.com</code></pre></div>
+<div class="code"><button class="copy">Copy</button><pre><code># backend
+pnpm add google-auth-library @ckb-ccc/core
+# frontend
+pnpm add @ckb-ccc/connector-react</code></pre></div>
+
+<h2 id="db"><span class="step">2</span>Database (Prisma)</h2>
+<p>Store the Google account id (<code>sub</code>), never the Google token. One wallet per user per network, with the key encrypted.</p>
+<div class="code"><div class="file">prisma/schema.prisma</div><button class="copy">Copy</button><pre><code>enum AuthProvider { EMAIL  CKB_WALLET  GOOGLE }
+enum WalletNetwork { TESTNET  MAINNET }
+
+model User {
+  id            String       @id @default(uuid())
+  name          String
+  email         String?      @unique
+  googleId      String?      @unique   // ID token "sub": stable, unlike email
+  authProvider  AuthProvider @default(EMAIL)
+  wallets       UserWallet[]
+  createdAt     DateTime     @default(now())
+}
+
+model UserWallet {
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  network        WalletNetwork
+  address        String
+  publicKey      String        // compressed secp256k1, safe to share
+  encryptedKey   String        // AES-256-GCM(private key, data key)
+  wrappedDataKey String        // AES-256-GCM(data key, master key)
+  keyVersion     Int           @default(1)
+  createdAt      DateTime      @default(now())
+  @@unique([userId, network])
+}</code></pre></div>
+<div class="code"><button class="copy">Copy</button><pre><code>npx prisma migrate dev --name google_wallets   # production: npx prisma migrate deploy
+npx prisma generate</code></pre></div>
+
+<h2 id="verify"><span class="step">3</span>Backend: verify the Google token</h2>
+<p><code>verifyIdToken</code> checks Google's signature, the issuer, the expiry and that the token was issued for <em>your</em> client ID. A token from another site is rejected.</p>
+<div class="code"><div class="file">auth/google-verification.ts</div><button class="copy">Copy</button><pre><code>import { OAuth2Client } from 'google-auth-library';
+
+const google = new OAuth2Client();
+
+export async function verifyGoogleCredential(credential: string) {
+  const clientIds = (process.env.GOOGLE_CLIENT_ID ?? '').split(',').map((s) =&gt; s.trim()).filter(Boolean);
+  if (!clientIds.length) throw new Error('GOOGLE_CLIENT_ID is not set');
+
+  const ticket = await google.verifyIdToken({ idToken: credential, audience: clientIds });
+  const p = ticket.getPayload();
+  if (!p?.sub || !p.email) throw new Error('invalid token');
+  if (p.email_verified !== true) throw new Error('email not verified');
+
+  return { sub: p.sub, email: p.email.toLowerCase(), name: p.name ?? null, issuedAt: p.iat ?? 0 };
+}</code></pre></div>
+<div class="code"><div class="file">auth/auth.service.ts</div><button class="copy">Copy</button><pre><code>async googleLogin(credential: string) {
+  const id = await verifyGoogleCredential(credential);   // throws -&gt; 401
+
+  let user = await prisma.user.findUnique({ where: { googleId: id.sub } });
+  if (!user) {
+    // Don't merge into an existing email/password account: if sign-up
+    // doesn't verify emails, someone could pre-register a victim's address.
+    if (await prisma.user.findUnique({ where: { email: id.email } })) {
+      throw new ConflictException('An account with this email already exists.');
+    }
+    user = await prisma.user.create({
+      data: { name: id.name ?? id.email.split('@')[0], email: id.email, googleId: id.sub, authProvider: 'GOOGLE' },
+    });
+  }
+
+  await wallets.ensureWallets(user.id);   // step 5 (best effort)
+  return issueSession(user);              // your existing access + refresh tokens
+}</code></pre></div>
+
+<h2 id="vault"><span class="step">4</span>Backend: encrypt the keys (envelope encryption)</h2>
+<p>Each private key is encrypted with its own random data key; the data key is encrypted with the master key from <code>WALLET_ENCRYPTION_KEY</code>. GCM's associated data binds each ciphertext to its user, network and address, so a copied row won't decrypt. Moving the master key into AWS KMS later only changes the wrap/unwrap step.</p>
+<div class="code"><div class="file">wallets/wallet-vault.ts</div><button class="copy">Copy</button><pre><code>import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+
+const master = Buffer.from(process.env.WALLET_ENCRYPTION_KEY!, 'base64'); // 32 bytes
+
+function seal(key: Buffer, data: Buffer, aad: string) {
+  const iv = randomBytes(12);
+  const c = createCipheriv('aes-256-gcm', key, iv);
+  c.setAAD(Buffer.from(aad));
+  const body = Buffer.concat([c.update(data), c.final()]);
+  return Buffer.concat([iv, c.getAuthTag(), body]).toString('base64');
+}
+
+function open(key: Buffer, sealed: string, aad: string) {
+  const raw = Buffer.from(sealed, 'base64');
+  const d = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12));
+  d.setAAD(Buffer.from(aad));
+  d.setAuthTag(raw.subarray(12, 28));
+  return Buffer.concat([d.update(raw.subarray(28)), d.final()]); // throws if tampered
+}
+
+const aadFor = (w: { userId: string; network: string; address: string }, part: string) =&gt;
+  `wallet:v1:${part}:${w.userId}:${w.network}:${w.address}`;
+
+export function sealKey(privateKey: Buffer, w: { userId: string; network: string; address: string }) {
+  const dataKey = randomBytes(32);
+  try {
+    return {
+      encryptedKey: seal(dataKey, privateKey, aadFor(w, 'key')),
+      wrappedDataKey: seal(master, dataKey, aadFor(w, 'data-key')),
+    };
+  } finally { dataKey.fill(0); }
+}
+
+/** Decrypts, runs `use`, wipes. Keep `use` short: sign and return. */
+export async function withPrivateKey&lt;T&gt;(row: any, use: (hex: string) =&gt; Promise&lt;T&gt;) {
+  const dataKey = open(master, row.wrappedDataKey, aadFor(row, 'data-key'));
+  const key = open(dataKey, row.encryptedKey, aadFor(row, 'key'));
+  try { return await use(`0x${key.toString('hex')}`); }
+  finally { dataKey.fill(0); key.fill(0); }
+}</code></pre></div>
+
+<h2 id="wallet"><span class="step">5</span>Backend: create wallets and sign with CCC</h2>
+<div class="code"><div class="file">wallets/wallet.service.ts</div><button class="copy">Copy</button><pre><code>import { ccc } from '@ckb-ccc/core';
+import { randomBytes } from 'node:crypto';
+
+const clientFor = (n: 'TESTNET' | 'MAINNET') =&gt;
+  n === 'MAINNET' ? new ccc.ClientPublicMainnet() : new ccc.ClientPublicTestnet();
+
+export async function ensureWallets(userId: string) {
+  for (const network of ['TESTNET', 'MAINNET'] as const) {
+    if (await prisma.userWallet.findUnique({ where: { userId_network: { userId, network } } })) continue;
+
+    const privateKey = randomBytes(32);                      // separate key per network
+    const signer = new ccc.SignerCkbPrivateKey(clientFor(network), privateKey);
+    const address = await signer.getRecommendedAddress();    // ckt1… / ckb1…
+    try {
+      await prisma.userWallet.create({
+        data: { userId, network, address, publicKey: signer.publicKey,
+                ...sealKey(privateKey, { userId, network, address }) },
+      });
+    } finally { privateKey.fill(0); }
+  }
+}
+
+// Send CKB: the server builds the transaction itself (used for mainnet).
+export async function transfer(userId: string, network: 'TESTNET' | 'MAINNET', to: string, amountCkb: string) {
+  const row = await prisma.userWallet.findUniqueOrThrow({ where: { userId_network: { userId, network } } });
+  const client = clientFor(network);
+  const { script } = await ccc.Address.fromString(to, client);   // rejects wrong-network prefix
+
+  return withPrivateKey(row, async (key) =&gt; {
+    const signer = new ccc.SignerCkbPrivateKey(client, key);
+    const tx = ccc.Transaction.from({
+      outputs: [{ lock: script, capacity: ccc.fixedPointFrom(amountCkb) }],  // ≥ 61 CKB
+      outputsData: ['0x'],
+    });
+    await tx.completeInputsByCapacity(signer);
+    await tx.completeFeeBy(signer);
+    return signer.sendTransaction(tx);
+  });
+}
+
+// Sign a transaction the browser built (e.g. a contract deploy). Testnet only.
+export async function signTestnet(userId: string, txJson: unknown) {
+  const row = await prisma.userWallet.findUniqueOrThrow({ where: { userId_network: { userId, network: 'TESTNET' } } });
+  const tx = ccc.Transaction.from(txJson as ccc.TransactionLike);
+  return withPrivateKey(row, async (key) =&gt; {
+    const signed = await new ccc.SignerCkbPrivateKey(clientFor('TESTNET'), key).signOnlyTransaction(tx);
+    return JSON.parse(ccc.stringify(signed));
+  });
+}</code></pre></div>
+
+<h2 id="api"><span class="step">6</span>Backend: API routes</h2>
+<table>
+  <tr><th>Route</th><th>Does</th><th>Guard</th></tr>
+  <tr><td><code>POST /auth/google</code></td><td>Verify the credential, find or create the user, start a session</td><td>Rate limit, trusted origin</td></tr>
+  <tr><td><code>GET /wallet</code></td><td>Addresses, public keys, balances. Never key material</td><td>Signed in</td></tr>
+  <tr><td><code>POST /wallet/transfer</code></td><td>Send CKB (server-built transaction)</td><td>Mainnet: fresh Google confirmation + daily limit</td></tr>
+  <tr><td><code>POST /wallet/sign-testnet</code></td><td>Sign a browser-built testnet transaction</td><td>Testnet only; refuse if it spends nothing of the wallet</td></tr>
+  <tr><td><code>POST /wallet/export</code></td><td>Return the private key so the user can leave</td><td>Fresh Google confirmation, <code>Cache-Control: no-store</code></td></tr>
+</table>
+<p><b>Fresh Google confirmation</b> = the client sends a new Google ID token; the server verifies it, checks <code>sub</code> equals the user's <code>googleId</code> and that <code>iat</code> is under 5 minutes old. A stolen session token alone then can't move mainnet funds.</p>
+<div class="code"><div class="file">wallets/confirm.ts</div><button class="copy">Copy</button><pre><code>async function confirmWithGoogle(userId: string, credential?: string) {
+  if (!credential) throw new UnauthorizedException('Confirm with Google to continue.');
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const id = await verifyGoogleCredential(credential);
+  if (id.sub !== user?.googleId) throw new UnauthorizedException('Use the Google account you signed in with.');
+  if (Date.now() / 1000 - id.issuedAt &gt; 300) throw new UnauthorizedException('Confirmation too old.');
+}</code></pre></div>
+
+<h2 id="frontend"><span class="step">7</span>Frontend: the Google button</h2>
+<p>Load Google Identity Services once, render its button, and post the <code>credential</code> to your API. The same component works for the mainnet "confirm with Google" step.</p>
+<div class="code"><div class="file">auth/GoogleSignInButton.tsx</div><button class="copy">Copy</button><pre><code>import { useEffect, useRef } from 'react';
+
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
+let loading: Promise&lt;any&gt; | null = null;
+
+function loadGis() {
+  if ((window as any).google?.accounts?.id) return Promise.resolve((window as any).google);
+  return (loading ??= new Promise((resolve, reject) =&gt; {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.onload = () =&gt; resolve((window as any).google);
+    s.onerror = () =&gt; { loading = null; reject(new Error("Couldn't load Google")); };
+    document.head.appendChild(s);
+  }));
+}
+
+export function GoogleSignInButton({ onCredential }: { onCredential: (c: string) =&gt; void }) {
+  const el = useRef&lt;HTMLDivElement&gt;(null);
+  const cb = useRef(onCredential);
+  cb.current = onCredential;
+
+  useEffect(() =&gt; {
+    if (!CLIENT_ID) return;
+    loadGis().then((google) =&gt; {
+      google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        ux_mode: 'popup',
+        callback: (r: { credential?: string }) =&gt; r.credential &amp;&amp; cb.current(r.credential),
+      });
+      google.accounts.id.renderButton(el.current!, {
+        theme: 'filled_black', size: 'large', text: 'continue_with',
+        width: Math.min(400, el.current!.offsetWidth),
+      });
+    });
+  }, []);
+
+  return CLIENT_ID ? &lt;div ref={el} style={{ width: '100%', minHeight: 44 }} /&gt; : null;
+}</code></pre></div>
+<div class="code"><div class="file">auth/SignInPage.tsx</div><button class="copy">Copy</button><pre><code>&lt;GoogleSignInButton
+  onCredential={async (credential) =&gt; {
+    const res = await fetch(`${API}/auth/google`, {
+      method: 'POST',
+      credentials: 'include',                       // refresh cookie
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential }),
+    });
+    if (!res.ok) return setError((await res.json()).message);
+    startSession(await res.json());                 // { accessToken, user }
+  }}
+/&gt;</code></pre></div>
+
+<h2 id="signer"><span class="step">8</span>Frontend: a CCC signer backed by your server</h2>
+<p>Extend CCC's public-key signer: CCC builds and prepares transactions in the browser as usual, but signing calls your API. Plug it in anywhere a CCC signer goes (deploy, transfer, dApp code).</p>
+<div class="code"><div class="file">wallet/server-signer.ts</div><button class="copy">Copy</button><pre><code>import { ccc } from '@ckb-ccc/connector-react';
+
+export class ServerTestnetSigner extends ccc.SignerCkbPublicKey {
+  async signOnlyTransaction(txLike: ccc.TransactionLike): Promise&lt;ccc.Transaction&gt; {
+    const tx = ccc.Transaction.from(txLike);
+    const res = await api('/wallet/sign-testnet', {
+      method: 'POST',
+      body: JSON.stringify({ transaction: JSON.parse(ccc.stringify(tx)) }),
+    });
+    return ccc.Transaction.from(res);
+  }
+}
+
+// Usage: publicKey comes from GET /wallet
+const signer = new ServerTestnetSigner(new ccc.ClientPublicTestnet(), wallet.publicKey);
+const tx = ccc.Transaction.from({ outputs: [{ lock }], outputsData: ['0x'] });
+await tx.completeInputsByCapacity(signer);
+await tx.completeFeeBy(signer);
+const hash = await signer.sendTransaction(tx);   // prepares, asks your server to sign, broadcasts</code></pre></div>
+<div class="note">Prefer a connected wallet when the user has one: <code>const signer = ccc.useSigner() ?? serverSigner;</code></div>
+
+<h2 id="security">Security checklist</h2>
+<ul class="check">
+  <li>Verify every ID token on the server, with your client ID as the audience. Never trust a decoded token from the browser.</li>
+  <li>Match users by Google <code>sub</code>, not email; only accept <code>email_verified</code>.</li>
+  <li>Don't auto-merge Google sign-ins into existing unverified email accounts.</li>
+  <li>Never return or log encrypted keys or plaintext keys (except the explicit export).</li>
+  <li>Mainnet: server-built transactions only, a fresh Google confirmation, and a daily limit.</li>
+  <li>Back up <code>WALLET_ENCRYPTION_KEY</code> off the server. Losing it loses every wallet; changing it breaks them.</li>
+  <li>The master key and the database on one server means a full server compromise exposes both. Move the master key to a KMS (e.g. AWS KMS) before real value builds up.</li>
+  <li>Let users export their key, and check the legal side of holding users' funds where you operate.</li>
+</ul>
+
+<h2 id="run">Run it</h2>
+<div class="code"><button class="copy">Copy</button><pre><code># backend
+cd backend
+pnpm install                    # commit the updated pnpm-lock.yaml too
+npx prisma migrate deploy
+npx prisma generate
+pnpm dev
+
+# frontend (VITE_ vars are baked in at build time)
+cd frontend
+VITE_GOOGLE_CLIENT_ID=... pnpm dev      # or pnpm build</code></pre></div>
+<table>
+  <tr><th>Symptom</th><th>Fix</th></tr>
+  <tr><td>No Google button</td><td><code>VITE_GOOGLE_CLIENT_ID</code> missing at build time; rebuild.</td></tr>
+  <tr><td>Popup: origin not allowed</td><td>Add the exact frontend origin (scheme, host, port) to Authorized JavaScript origins.</td></tr>
+  <tr><td>401 "Google sign-in failed"</td><td>Backend <code>GOOGLE_CLIENT_ID</code> differs from the frontend's.</td></tr>
+  <tr><td>"Wallets not set up"</td><td><code>WALLET_ENCRYPTION_KEY</code> missing on the backend.</td></tr>
+  <tr><td>Docker build: outdated lockfile</td><td>Run <code>pnpm install</code> locally and commit <code>pnpm-lock.yaml</code>.</td></tr>
+</table>
+
+<footer>Corven · Google sign-in with CKB wallets · uses google-auth-library, Google Identity Services and CCC (@ckb-ccc).</footer>
+</div>
+
+<script>
+  document.querySelectorAll('.copy').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const code = btn.parentElement.querySelector('pre').innerText;
+      try { await navigator.clipboard.writeText(code); btn.textContent = 'Copied'; }
+      catch { btn.textContent = 'Select to copy'; }
+      setTimeout(() => (btn.textContent = 'Copy'), 1500);
+    });
+  });
+</script>
+</body>
+</html>

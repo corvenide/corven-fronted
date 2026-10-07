@@ -23,6 +23,12 @@ import { useAuth } from '../features/auth/hooks/useAuth';
 interface AuthViewProps {
     onAuthenticated?: () => void;
     sessionExpired?: boolean;
+    /** The visitor is using a guest session; signing in keeps their workspaces. */
+    guest?: boolean;
+    /** Where "back" goes; guests go back to their dashboard. */
+    backHref?: string;
+    /** Signing in to manage Corven Connect apps. */
+    intent?: 'ide' | 'connect';
 }
 
 type Phase = 'idle' | 'preparing' | 'signing' | 'verifying' | 'done';
@@ -60,7 +66,7 @@ const PHASE_LABEL: Record<Phase, string> = {
     done: 'Signed in',
 };
 
-export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewProps) {
+export default function AuthView({ onAuthenticated, sessionExpired, guest = false, backHref = '/', intent = 'ide' }: AuthViewProps) {
     const { open, wallet, disconnect } = ccc.useCcc();
     const signer = ccc.useSigner();
     const { walletLogin, googleLogin } = useAuth();
@@ -238,10 +244,11 @@ export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewPr
                             <span className="text-[16px] font-semibold tracking-[-0.02em]">Corven</span>
                         </a>
                         <a
-                            href="/"
+                            href={backHref}
                             className="ml-auto inline-flex items-center gap-1.5 text-[13px] text-[var(--muted)] transition-colors hover:text-[var(--text)]"
                         >
-                            <ArrowLeft className="h-3.5 w-3.5" /> Back to home
+                            <ArrowLeft className="h-3.5 w-3.5" />{' '}
+                            {intent === 'connect' ? 'Back to Corven Connect' : guest ? 'Back to your workspaces' : 'Back to home'}
                         </a>
                     </div>
 
@@ -254,7 +261,13 @@ export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewPr
                             </div>
 
                             <h2 className="mt-5 text-[2rem] font-medium leading-[1.1] tracking-[-0.035em]">
-                                {connected ? 'Confirm it’s you' : 'Sign in to Corven'}
+                                {connected
+                                    ? 'Confirm it’s you'
+                                    : intent === 'connect'
+                                        ? 'Sign in to Corven Connect'
+                                        : guest
+                                            ? 'Keep your work'
+                                            : 'Sign in to Corven'}
                             </h2>
                             <p className="mt-3 text-[15px] leading-[1.6] text-[var(--muted)]">
                                 {connected
@@ -265,6 +278,13 @@ export default function AuthView({ onAuthenticated, sessionExpired }: AuthViewPr
                             </p>
 
                             {connected && <Steps connected={connected} phase={phase} />}
+
+                            {guest && !connected && !error && (
+                                <Notice tone="info">
+                                    You’re using Corven as a guest. Connect a wallet or sign in, and your temporary
+                                    workspaces come with you. You’ll choose which to keep.
+                                </Notice>
+                            )}
 
                             {sessionExpired && !error && phase === 'idle' && (
                                 <Notice tone="info">Your session ended. Sign in again to pick up where you left off.</Notice>

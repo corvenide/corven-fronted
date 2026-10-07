@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +7,7 @@ import ProtectedRoute from './ProtectedRoute';
 const auth = vi.hoisted(() => ({
     isAuthenticated: false,
     isInitializing: false,
+    startGuest: vi.fn<() => Promise<void>>(),
 }));
 
 vi.mock('../../features/auth/hooks/useAuth', () => ({
@@ -36,6 +37,7 @@ describe('ProtectedRoute', () => {
     beforeEach(() => {
         auth.isAuthenticated = false;
         auth.isInitializing = false;
+        auth.startGuest = vi.fn(() => new Promise<void>(() => undefined));
     });
 
     it('shows a loading screen while the session is being restored', () => {
@@ -46,11 +48,26 @@ describe('ProtectedRoute', () => {
         expect(screen.queryByText('Dashboard content')).not.toBeInTheDocument();
     });
 
-    it('sends signed-out visitors to /auth and remembers where they were going', () => {
+    it('does not start a guest session while the session is being restored', () => {
+        auth.isInitializing = true;
         renderAt('/dashboard');
 
-        expect(screen.getByText('Sign in page (from /dashboard)')).toBeInTheDocument();
+        expect(auth.startGuest).not.toHaveBeenCalled();
+    });
+
+    it('starts a guest session for visitors without one, instead of asking them to sign in', () => {
+        renderAt('/dashboard');
+
+        expect(auth.startGuest).toHaveBeenCalledTimes(1);
+        expect(screen.queryByText(/Sign in page/)).not.toBeInTheDocument();
         expect(screen.queryByText('Dashboard content')).not.toBeInTheDocument();
+    });
+
+    it('falls back to /auth when a guest session cannot be started', async () => {
+        auth.startGuest = vi.fn(() => Promise.reject(new Error('offline')));
+        renderAt('/dashboard');
+
+        await waitFor(() => expect(screen.getByText('Sign in page (from /dashboard)')).toBeInTheDocument());
     });
 
     it('renders the page for signed-in users', () => {

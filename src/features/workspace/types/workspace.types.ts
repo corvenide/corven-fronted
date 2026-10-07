@@ -15,6 +15,10 @@ export interface Workspace {
     status: WorkspaceStatus;
     userId: string;
     templateId: string | null;
+    /** Deleted 24 hours after its last use unless kept. Guests' workspaces always are. */
+    temporary?: boolean;
+    /** When a temporary workspace will be deleted if unused; null when kept. */
+    expiresAt?: string | null;
     runtimeNetwork: string | null;
     runtimeVolume: string | null;
     lastStartedAt: string | null;

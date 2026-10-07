@@ -16,6 +16,8 @@ export interface WorkspaceTemplate {
 export interface CreateWorkspaceInput {
     name: string;
     templateId?: string;
+    /** Deleted 24 hours after its last use. Guests' workspaces always are. */
+    temporary?: boolean;
 }
 
 export const workspaceApi = {
@@ -48,6 +50,14 @@ export const workspaceApi = {
                 body: JSON.stringify(input),
             },
         );
+    },
+
+    /** Keep a workspace (temporary: false) or let it expire (temporary: true). */
+    setTemporary(workspaceId: string, temporary: boolean): Promise<Workspace> {
+        return apiClient<Workspace>(`/workspaces/${workspaceId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ temporary }),
+        });
     },
 
     /** Returns immediately; poll status() to follow provisioning. */

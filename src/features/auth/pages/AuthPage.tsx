@@ -8,15 +8,17 @@ import { useAuth } from '../hooks/useAuth';
 
 interface LocationState {
     from?: { pathname?: string; search?: string };
+    intent?: 'ide' | 'connect';
 }
 
 export default function AuthPage() {
-    const { isAuthenticated, isInitializing, endReason } = useAuth();
+    const { isAuthenticated, isGuest, isInitializing, endReason } = useAuth();
 
     const navigate = useNavigate();
     const location = useLocation();
 
     const from = (location.state as LocationState | null)?.from;
+    const intent = (location.state as LocationState | null)?.intent === 'connect' ? 'connect' : 'ide';
 
     // Only ever redirect back inside the app.
     const destination =
@@ -28,12 +30,16 @@ export default function AuthPage() {
         return <LoadingScreen />;
     }
 
-    if (isAuthenticated) {
+    // Guests come here to connect a wallet or sign in and keep their work.
+    if (isAuthenticated && !isGuest) {
         return <Navigate to={destination} replace />;
     }
 
     return (
         <AuthView
+            guest={isGuest}
+            intent={intent}
+            backHref={intent === 'connect' ? '/connect' : isGuest ? '/dashboard' : '/'}
             sessionExpired={endReason === 'expired'}
             onAuthenticated={() => navigate(destination, { replace: true })}
         />

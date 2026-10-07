@@ -62,6 +62,14 @@ export function useWorkspaces() {
         },
     });
 
+    const keepMutation = useMutation({
+        mutationFn: ({ workspaceId, temporary }: { workspaceId: string; temporary: boolean }) =>
+            workspaceApi.setTemporary(workspaceId, temporary),
+        onSuccess: async () => {
+            await invalidateList();
+        },
+    });
+
     const removeMutation = useMutation({
         mutationFn: (workspaceId: string) =>
             workspaceApi.remove(workspaceId),
@@ -91,6 +99,10 @@ export function useWorkspaces() {
         stoppingWorkspaceId: stopMutation.isPending
             ? (stopMutation.variables as string | undefined)
             : undefined,
+
+        /** Keep (temporary: false) or let expire (temporary: true). */
+        setWorkspaceTemporary: keepMutation.mutateAsync,
+        keepingWorkspaceId: keepMutation.isPending ? keepMutation.variables?.workspaceId : undefined,
 
         removeWorkspace: removeMutation.mutateAsync,
         removingWorkspaceId: removeMutation.isPending
