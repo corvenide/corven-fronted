@@ -46,6 +46,10 @@ export default defineConfig(() => {
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           // Client-side routes (/dashboard, /ide/:id, ...) load the app shell.
           navigateFallback: '/index.html',
+          navigateFallbackDenylist: [
+            /^\/sitemap\.xml$/,
+            /^\/robots\.txt$/,
+          ],
           cleanupOutdatedCaches: true,
           runtimeCaching: [
             {
