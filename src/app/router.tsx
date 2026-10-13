@@ -102,12 +102,8 @@ export const router = createBrowserRouter([
         path: '/community',
         element: <Navigate to="/dashboard?tab=community" replace />,
     },
-    {
-        path: '/sitemap.xml',
-        element: <></>,
-    },
-    {
-        path: '*',
-        element: <NotFoundPage />,
-    },
+    // {
+    //     path: '*',
+    //     element: <NotFoundPage />,
+    // },
 ]);
