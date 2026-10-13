@@ -42,23 +42,31 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
-          // The main bundle is ~2.7 MB.
+
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-          // Client-side routes (/dashboard, /ide/:id, ...) load the app shell.
+
           navigateFallback: '/index.html',
+
+          // Keep static SEO files out of the SPA navigation fallback.
           navigateFallbackDenylist: [
             /^\/sitemap\.xml$/,
             /^\/robots\.txt$/,
           ],
+
           cleanupOutdatedCaches: true,
+
           runtimeCaching: [
             {
               urlPattern: ({ url }) =>
-                url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
+                url.origin === 'https://fonts.googleapis.com' ||
+                url.origin === 'https://fonts.gstatic.com',
               handler: 'StaleWhileRevalidate',
               options: {
                 cacheName: 'google-fonts',
-                expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                expiration: {
+                  maxEntries: 30,
+                  maxAgeSeconds: 60 * 60 * 24 * 365,
+                },
               },
             },
           ],
