@@ -19,7 +19,7 @@ export interface DocPage {
 
 const API = 'https://staging-api.corvanide.space/connect/v1';
 
-const QUICKSTART_APP = `import { CorvenConnectProvider, ConnectButton, useCorvenConnect } from '@corven/connect-react';
+const QUICKSTART_APP = `import { CorvenConnectProvider, ConnectButton, useCorvenConnect } from '@corven-sdk/connect-react';
 import { ccc } from '@ckb-ccc/core';
 
 export default function App() {
@@ -55,7 +55,7 @@ export const DOCS: DocPage[] = [
         slug: 'introduction',
         title: 'Introduction',
         group: 'Getting started',
-        summary: 'Sign-in and a CKB wallet for your users, without seed phrases.',
+        summary: 'Seamless sign‑in and built‑in CKB wallet for your users, no seed phrases required.',
         sections: ['What you get', 'How it works', 'Next steps'],
         body: (
             <>
@@ -65,6 +65,9 @@ export const DOCS: DocPage[] = [
                     embedded CKB wallet on testnet and mainnet. There’s no extension to install and no seed phrase to
                     write down.
                 </P>
+<P>
+  <C>npm install @corven-sdk/connect @corven-sdk/connect-react</C> – install the core SDK and the React bindings, both published under the @corven-sdk scope.
+</P>
 
                 <H2>What you get</H2>
                 <UL>
@@ -137,12 +140,13 @@ export const DOCS: DocPage[] = [
                 />
 
                 <H2>Install</H2>
-                <CodeBlock lang="bash" code={`npm install @corven/connect-react @ckb-ccc/core
-# optional: "Connect a wallet" (JoyID, MetaMask, UniSat, OKX…)
+                                <CodeBlock lang="bash" code={`npm install @corven-sdk/connect @corven-sdk/connect-react
+# optional: install wallet support
 npm install @ckb-ccc/ccc`} />
+
                 <P>
-                    <C>@corven/connect-react</C> includes the framework-free client, <C>@corven/connect</C>. Use that one
-                    on its own if you don’t use React (see <DocLink to="/connect/docs/core-sdk">Core SDK</DocLink>).
+                    <C>@corven-sdk/connect</C> provides the framework‑agnostic client. <C>@corven-sdk/connect-react</C> adds React hooks and components on top of it. For wallet functionality you may also install <C>@ckb-ccc/ccc</C>.
+                    Use the core SDK alone if you don’t use React (see <DocLink to="/connect/docs/core-sdk">Core SDK</DocLink>).
                 </P>
 
                 <H2>Add the provider</H2>
@@ -265,7 +269,7 @@ npm install @ckb-ccc/ccc`} />
                     <li>If the user approves, Corven looks up every input on chain (anything the transaction claims about its inputs is ignored), checks it spends the user’s own cells, and signs it.</li>
                     <li>If they reject, the call throws <C>UserRejectedError</C>.</li>
                 </OL>
-                <CodeBlock lang="ts" code={`import { UserRejectedError } from '@corven/connect-react';
+                <CodeBlock lang="ts" code={`import { UserRejectedError } from '@corven-sdk/connect-react';
 
 try {
   await signer.sendTransaction(tx);
@@ -357,7 +361,7 @@ try {
         slug: 'react-sdk',
         title: 'React SDK',
         group: 'Reference',
-        summary: '@corven/connect-react: provider, hook and button.',
+        summary: '@corven-sdk/connect-react: provider, hook and button.',
         sections: ['CorvenConnectProvider', 'useCorvenConnect', 'ConnectButton', 'Theming'],
         body: (
             <>
@@ -391,7 +395,7 @@ try {
                         [<C>getSigner(network?)</C>, <>A CCC signer, <C>'TESTNET'</C> by default.</>],
                         [<C>externalWallet</C>, 'The user’s own wallet, when they signed in with one and it’s connected.'],
                         [<C>reconnectWallet()</C>, 'Asks their own wallet to connect again. Resolves to true when connected.'],
-                        [<C>client</C>, <>The underlying <C>@corven/connect</C> client.</>],
+                        [<C>client</C>, <>The underlying <C>@corven-sdk/connect</C> client.</>],
                     ]}
                 />
 
@@ -418,12 +422,12 @@ try {
         slug: 'core-sdk',
         title: 'Core SDK',
         group: 'Reference',
-        summary: '@corven/connect: the framework-free client.',
+        summary: '@corven-sdk/connect: the framework-free client.',
         sections: ['Create a client', 'Sign in', 'Session and user', 'Wallets', 'Errors'],
         body: (
             <>
                 <H2>Create a client</H2>
-                <CodeBlock lang="ts" code={`import { createCorvenConnect } from '@corven/connect';
+                <CodeBlock lang="ts" code={`import { createCorvenConnect } from '@corven-sdk/connect';
 
 const connect = createCorvenConnect({
   appId: 'app_…',

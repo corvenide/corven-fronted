@@ -201,8 +201,8 @@ function Methods({ methods }: { methods: AppStats['methods'] }) {
 }
 
 function QuickStart({ app }: { app: ConnectApp }) {
-    const install = `npm install @corven/connect-react @ckb-ccc/core${app.loginMethods.includes('WALLET') ? ' @ckb-ccc/ccc' : ''}`;
-    const code = `import { CorvenConnectProvider, ConnectButton, useCorvenConnect } from '@corven/connect-react';
+    const install = `npm install @corven-sdk/connect-react @ckb-ccc/core${app.loginMethods.includes('WALLET') ? ' @ckb-ccc/ccc' : ''}`;
+    const code = `import { CorvenConnectProvider, ConnectButton, useCorvenConnect } from '@corven-sdk/connect-react';
 
 export default function App() {
   return (
